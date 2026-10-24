@@ -7,6 +7,7 @@ file is always JSON lines.
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -89,3 +90,11 @@ def mask_number(raw: str) -> str:
     if len(number) < 7:
         return "***"
     return f"{number[:3]}***{number[-4:]}"
+
+
+_PHONE = re.compile(r"\+\d{8,15}")
+
+
+def mask_numbers_in_text(text: str) -> str:
+    """Mask every +E.164 number inside free text (e.g. provider error messages)."""
+    return _PHONE.sub(lambda m: mask_number(m.group(0)), text)

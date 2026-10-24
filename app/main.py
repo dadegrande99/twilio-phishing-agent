@@ -12,7 +12,8 @@ from app.agent.graph import build_graph
 from app.agent.llm import AnalysisLLM, create_llm
 from app.agent.runner import AnalysisRunner, MessageDeduper
 from app.api import debug, health, twilio_webhook
-from app.channels.twilio_client import MessagingGateway, TwilioGateway
+from app.channels.models import MessagingGateway
+from app.channels.twilio_client import TwilioGateway
 from app.config import Settings
 from app.logging import configure_logging, get_logger
 from app.whitelist import Whitelist

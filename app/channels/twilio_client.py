@@ -4,9 +4,7 @@ See docs/twilio.md (§6 media, §7 sending and status callbacks).
 """
 
 import asyncio
-import re
 import time
-from typing import Literal, Protocol
 from urllib.parse import urlsplit
 
 import httpx
@@ -14,40 +12,19 @@ from twilio.http.http_client import TwilioHttpClient
 from twilio.rest import Client
 
 from app.agent.schemas import ImageInput
-from app.channels.models import MediaRef
+from app.channels.models import MediaRef, MessageKind, MessagingGateway  # noqa: F401
 from app.channels.twilio_security import public_url
 from app.config import Settings
-from app.logging import get_logger, mask_number
+from app.logging import get_logger, mask_number, mask_numbers_in_text
 from app.media import MediaRejected, normalize_content_type, validate_image
 
 log = get_logger(__name__)
 
-MessageKind = Literal["ack", "progress", "final", "help", "error"]
 
 DOWNLOAD_TIMEOUT_SECONDS = 15
 SEND_TIMEOUT_SECONDS = 15
 # Twilio media URLs live on api.twilio.com; never send our credentials anywhere else.
 TWILIO_MEDIA_HOST = "api.twilio.com"
-
-_PHONE = re.compile(r"\+\d{8,15}")
-
-
-def _mask_numbers(text: str) -> str:
-    return _PHONE.sub(lambda m: mask_number(m.group(0)), text)
-
-
-class MessagingGateway(Protocol):
-    async def send(self, to: str, body: str, kind: MessageKind) -> str | None:
-        """Send a WhatsApp message; returns the Twilio SID, or None on failure. Never raises."""
-        ...
-
-    async def download_image(self, media: MediaRef) -> ImageInput:
-        """Download and validate an inbound image; raises MediaRejected."""
-        ...
-
-    async def acknowledge(self, to: str, message_id: str, ack_text: str) -> None:
-        """Tell the user their message arrived, the channel's way. Never raises."""
-        ...
 
 
 class TwilioGateway:
@@ -90,7 +67,7 @@ class TwilioGateway:
                 to=mask_number(to),
                 error_code=getattr(e, "code", None),
                 # Twilio error texts can contain the recipient's number.
-                error=_mask_numbers(str(getattr(e, "msg", "") or e)),
+                error=mask_numbers_in_text(str(getattr(e, "msg", "") or e)),
                 ms=round((time.perf_counter() - start) * 1000),
             )
             return None
