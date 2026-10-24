@@ -1,0 +1,6 @@
+{
+  "allowed_numbers": [
+    { "number": "+393331234567", "name": "Davide" },
+    { "number": "+393409876543", "name": "Tester" }
+  ]
+}
