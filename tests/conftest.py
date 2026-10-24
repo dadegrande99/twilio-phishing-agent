@@ -67,3 +67,27 @@ def meta_settings(settings) -> Settings:
         public_base_url="https://test.example",
         whitelist_path=settings.whitelist_path,
     )
+
+
+@pytest.fixture
+def meta_gateway():
+    from tests.fakes import FakeGateway
+
+    return FakeGateway()
+
+
+@pytest.fixture
+def meta_client(meta_settings, meta_gateway):
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from app.whitelist import Whitelist
+    from tests.fakes import FakeLLM, make_extraction, make_verdict
+
+    app = create_app(
+        meta_settings,
+        llm=FakeLLM(make_extraction(), make_verdict()),
+        gateway=meta_gateway,
+        whitelist=Whitelist(meta_settings.whitelist_path),
+    )
+    return TestClient(app)

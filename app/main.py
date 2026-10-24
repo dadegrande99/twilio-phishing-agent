@@ -11,7 +11,8 @@ from fastapi import FastAPI, Request
 from app.agent.graph import build_graph
 from app.agent.llm import AnalysisLLM, create_llm
 from app.agent.runner import AnalysisRunner, MessageDeduper
-from app.api import debug, health, twilio_webhook
+from app.api import debug, health, meta_webhook, twilio_webhook
+from app.channels.meta_client import MetaGateway
 from app.channels.models import MessagingGateway
 from app.channels.twilio_client import TwilioGateway
 from app.config import Settings
@@ -19,6 +20,11 @@ from app.logging import configure_logging, get_logger
 from app.whitelist import Whitelist
 
 log = get_logger(__name__)
+
+
+def create_gateway(settings: Settings) -> MessagingGateway:
+    """The outbound side of the channel selected with CHANNEL."""
+    return MetaGateway(settings) if settings.channel == "meta" else TwilioGateway(settings)
 
 
 def create_app(
@@ -41,7 +47,7 @@ def create_app(
     app.state.whitelist = whitelist if whitelist is not None else Whitelist(settings.whitelist_path)
     app.state.deduper = MessageDeduper()
     app.state.runner = AnalysisRunner(
-        app.state.graph, gateway or TwilioGateway(settings), settings
+        app.state.graph, gateway or create_gateway(settings), settings
     )
 
     @app.middleware("http")
@@ -58,9 +64,17 @@ def create_app(
         return response
 
     app.include_router(health.router)
-    app.include_router(twilio_webhook.router)
+    # Only the active channel's webhook is mounted.
+    app.include_router(
+        meta_webhook.router if settings.channel == "meta" else twilio_webhook.router
+    )
     if settings.debug:
         app.include_router(debug.router)
 
-    log.info("app.started", model=settings.anthropic_model, debug=settings.debug)
+    log.info(
+        "app.started",
+        channel=settings.channel,
+        model=settings.anthropic_model,
+        debug=settings.debug,
+    )
     return app

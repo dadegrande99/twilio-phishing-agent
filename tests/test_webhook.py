@@ -97,3 +97,7 @@ def test_signature_check_can_be_disabled(settings):
 
 def test_health_reports_whitelist(app_client):
     assert app_client.get("/health").json()["whitelist_entries"] == 1
+
+
+def test_meta_webhook_not_mounted_on_twilio(app_client):
+    assert app_client.get("/webhooks/meta").status_code == 404
