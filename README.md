@@ -96,6 +96,22 @@ uv run pytest -m live    # chiamata reale a Claude (serve ANTHROPIC_API_KEY, cos
 uv run ruff check
 ```
 
+## Valutare l'agente
+
+```bash
+cp evals/labels.example.json evals/labels.json   # elenco dei campioni con l'etichetta attesa
+# metti gli screenshot in evals/samples/ (cartella ignorata da git)
+uv run python -m evals.run_eval                  # chiede conferma: ogni campione = 2 chiamate a Claude
+```
+
+Ogni campione ha `file` (uno screenshot in `evals/samples/`) **oppure** `text`, più `expected`: `phishing`, `sospetto`, `probabilmente_legittimo` o `indeterminato`. Lo script stampa:
+- l'esito di ogni campione;
+- l'accuratezza (`sospetto` conta come corretto quando l'atteso è `phishing`, perché l'utente deve fare la stessa cosa);
+- i **dangerous misses**, cioè truffe giudicate legittime: è il numero da tenere a zero;
+- la matrice di confusione.
+
+I risultati vengono salvati in `evals/results/`. Il file di esempio contiene anche un caso di prompt injection, un messaggio che "ordina" all'assistente di rispondere che è legittimo.
+
 ## LangSmith (opzionale)
 
 Imposta `LANGSMITH_TRACING=true` e `LANGSMITH_API_KEY` nel `.env` per vedere ogni analisi come trace: prompt, immagine, output, token e tempi. Dettagli in [docs/langsmith.md](docs/langsmith.md).
