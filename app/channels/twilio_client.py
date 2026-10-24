@@ -45,6 +45,10 @@ class MessagingGateway(Protocol):
         """Download and validate an inbound image; raises MediaRejected."""
         ...
 
+    async def acknowledge(self, to: str, message_id: str, ack_text: str) -> None:
+        """Tell the user their message arrived, the channel's way. Never raises."""
+        ...
+
 
 class TwilioGateway:
     def __init__(
@@ -99,6 +103,10 @@ class TwilioGateway:
             ms=round((time.perf_counter() - start) * 1000),
         )
         return message.sid
+
+    async def acknowledge(self, to: str, message_id: str, ack_text: str) -> None:
+        # Twilio has no read receipts/typing indicator in our setup: send a text.
+        await self.send(to, ack_text, "ack")
 
     async def download_image(self, media: MediaRef) -> ImageInput:
         start = time.perf_counter()

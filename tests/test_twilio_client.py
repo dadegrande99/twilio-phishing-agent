@@ -135,3 +135,9 @@ async def test_download_refuses_non_twilio_urls(settings, url):
         await gateway_with_http(settings, handler).download_image(MediaRef(url, "image/png"))
     assert e.value.reason == "download_failed"
     assert calls == []  # credentials never sent
+
+
+async def test_twilio_acknowledge_sends_ack_text(settings):
+    tw = twilio_mock()
+    await TwilioGateway(settings, client=tw).acknowledge("+393331234567", "MM1", "ok!")
+    assert tw.messages.create.call_args.kwargs["body"] == "ok!"

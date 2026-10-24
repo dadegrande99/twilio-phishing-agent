@@ -86,6 +86,7 @@ class FakeGateway:
         self.fail_kinds = fail_kinds or set()
         self.send_delay = send_delay
         self.sent: list[tuple[str, str, str]] = []
+        self.acked: list[str] = []
 
     async def send(self, to: str, body: str, kind: str) -> str | None:
         if self.send_delay:
@@ -94,6 +95,10 @@ class FakeGateway:
             return None
         self.sent.append((to, body, kind))
         return f"SM{len(self.sent)}"
+
+    async def acknowledge(self, to: str, message_id: str, ack_text: str) -> None:
+        self.acked.append(message_id)
+        await self.send(to, ack_text, "ack")
 
     async def download_image(self, media):
         result = self.images[media.locator]

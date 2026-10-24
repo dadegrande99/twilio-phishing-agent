@@ -106,7 +106,7 @@ class AnalysisRunner:
             self._completed(started_at, "help")
             return
 
-        await self._send(user, ACK_TEXT, "ack")
+        await self._gateway.acknowledge(user.number, inbound.message_sid, ACK_TEXT)
 
         images = []
         for media in inbound.media:

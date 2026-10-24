@@ -174,3 +174,9 @@ def test_deduper_ttl():
     assert d.first_time("MM1") and not d.first_time("MM1")
     now[0] = 11
     assert d.first_time("MM1")
+
+
+async def test_runner_acknowledges_with_message_id(settings):
+    r, _, gw = runner(settings)
+    await r.handle(inbound(sid="MM7"), USER)
+    assert gw.acked == ["MM7"]
