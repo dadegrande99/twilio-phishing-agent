@@ -28,3 +28,12 @@ def test_json_file_contains_bound_context(tmp_path):
     assert line["analysis_id"] == "abc123"
     assert line["wait_ms"] == 5
     assert "timestamp" in line and line["level"] == "info"
+
+
+def test_debug_level_keeps_sdk_loggers_quiet(tmp_path):
+    # At DEBUG the anthropic SDK would log full request bodies (base64 images, captions).
+    import logging
+
+    configure_logging("DEBUG", "json", tmp_path / "app.jsonl")
+    for name in ("anthropic", "langsmith", "httpx", "twilio"):
+        assert logging.getLogger(name).getEffectiveLevel() >= logging.WARNING

@@ -4,8 +4,9 @@ import time
 from typing import Protocol
 
 import anthropic
+from anthropic.lib._parse._transform import to_json_output_format
 from langsmith import traceable
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.agent.prompts import (
     EXTRACT_SYSTEM,
@@ -70,14 +71,16 @@ class AnthropicAnalysisLLM:
         self, *, node: str, system: str, messages: list[dict], schema: type[T], effort: str
     ) -> T:
         # No temperature and no forced tool_choice: Claude Sonnet 5.5 rejects both with a 400.
+        # messages.create + our own parsing instead of messages.parse: parse() validates every
+        # text block, so a partial answer from a model that declined before a fallback (or a
+        # refusal after some text) would raise before we can inspect stop_reason.
         start = time.perf_counter()
-        response = await self._client.beta.messages.parse(
+        response = await self._client.beta.messages.create(
             model=self._model,
             max_tokens=MAX_TOKENS,
             system=system,
             messages=messages,
-            output_format=schema,
-            output_config={"effort": effort},
+            output_config={"effort": effort, "format": to_json_output_format(schema)},
             betas=[FALLBACK_BETA],
             fallbacks="default",
         )
@@ -94,9 +97,28 @@ class AnthropicAnalysisLLM:
             category = getattr(response.stop_details, "category", None)
             log.warning("llm.refusal", node=node, category=category)
             raise LLMRefusalError(category)
-        if response.parsed_output is None:
-            raise LLMOutputError(f"{node}: no parsed output (stop_reason={response.stop_reason})")
-        return response.parsed_output
+        return _parse_output(response, schema, node)
+
+
+def _parse_output[T: BaseModel](response, schema: type[T], node: str) -> T:
+    """Validate the JSON written by the model that finished the turn.
+
+    A `fallback` block marks where a declining model's output ends and the fallback
+    model's begins: only the text after the last one is the answer.
+    """
+    blocks = list(response.content)
+    last_fallback = max((i for i, b in enumerate(blocks) if b.type == "fallback"), default=-1)
+    text = "".join(b.text for b in blocks[last_fallback + 1 :] if b.type == "text")
+    if not text:
+        raise LLMOutputError(f"{node}: empty output (stop_reason={response.stop_reason})")
+    try:
+        return schema.model_validate_json(text)
+    except ValidationError:
+        # No `from e`: the validation error embeds the model output (user content).
+        raise LLMOutputError(
+            f"{node}: output does not match {schema.__name__} "
+            f"(stop_reason={response.stop_reason})"
+        ) from None
 
 
 def create_llm(settings: Settings) -> AnthropicAnalysisLLM:

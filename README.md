@@ -52,7 +52,7 @@ Se riavvii ngrok l'URL cambia: aggiornalo **sia** nel `.env` **sia** nella conso
 
 ## Debug senza WhatsApp
 
-Con `DEBUG=true` è attivo un endpoint che esegue lo stesso grafo su un'immagine caricata:
+Con `DEBUG=true` è attivo un endpoint che esegue lo stesso grafo su un'immagine caricata. Risponde solo alle richieste locali: quelle che arrivano da ngrok, riconoscibili dall'header `X-Forwarded-For`, ricevono 404.
 
 ```bash
 curl -s -F "image=@screenshot.png" -F "caption=è vero?" localhost:8000/debug/analyze | python -m json.tool

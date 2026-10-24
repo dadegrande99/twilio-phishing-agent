@@ -92,7 +92,8 @@ Noi rifacciamo lo stesso calcolo con `twilio.request_validator.RequestValidator`
 `MediaUrl0` non è un file pubblico: è una risorsa dell'API Twilio. La scarichiamo con `httpx`:
 - autenticazione **basic** con `(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)`;
 - `follow_redirects=True`, perché Twilio risponde con un redirect verso lo storage vero e proprio;
-- controllo di tipo (`image/jpeg`, `image/png`, `image/webp`) e dimensione (massimo 5 MB, limite delle immagini per Claude).
+- controllo di tipo (`image/jpeg`, `image/png`, `image/webp`) e dimensione (massimo 3,75 MB: in base64 restano sotto i 5 MB per immagine accettati da Claude);
+- download solo da `https://api.twilio.com`: le credenziali non vengono mai inviate ad altri host.
 
 L'immagine resta solo in memoria (base64) per la durata dell'analisi.
 
@@ -127,7 +128,7 @@ Limite: 1600 caratteri per messaggio. Il nostro messaggio finale resta sotto i 1
 | `webhook.not_whitelisted` per il tuo numero | Numero non in `config/whitelist.json`, o non in formato E.164 | Aggiungi `+39...` senza spazi |
 | Errore **63015** in `twilio.status.updated` | Il destinatario non si è unito alla sandbox, o l'adesione è scaduta | Rimanda `join <parola>` al numero sandbox |
 | Errore **63016** | Messaggio fuori dalla finestra di 24 ore | Non dovrebbe capitare: l'utente ha appena scritto |
-| `media.rejected` con `reason=http_401` | Download senza credenziali | Controlla SID/token nel `.env` |
+| `media.rejected` con `reason=download_failed status=401` | Download con credenziali sbagliate | Controlla SID/token nel `.env` |
 
 Per gli altri codici d'errore: Twilio Console → **Monitor → Logs → Errors**. Ogni codice ha una pagina con la spiegazione.
 
@@ -136,7 +137,7 @@ Per gli altri codici d'errore: Twilio Console → **Monitor → Logs → Errors*
 1. Crea un account su twilio.com, poi nella Console copia **Account SID** e **Auth Token** in `.env`.
 2. Console → **Messaging → Try it out → Send a WhatsApp message**. Trovi il numero sandbox e la tua parola `join <xxx-yyy>`.
 3. Dal tuo WhatsApp manda `join <xxx-yyy>` al numero sandbox. Ripeti per ogni tester. L'adesione scade dopo qualche giorno: se smetti di ricevere messaggi, rimandala.
-4. Avvia il server: `uv run uvicorn app.main:app --port 8000`.
+4. Avvia il server: `uv run uvicorn app.main:create_app --factory --port 8000`.
 5. Avvia ngrok: `ngrok http 8000` e copia l'URL `https://....ngrok-free.app`.
 6. Metti quell'URL in `PUBLIC_BASE_URL` nel `.env` e riavvia il server.
 7. Console → **Sandbox settings**:

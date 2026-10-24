@@ -73,10 +73,10 @@ def configure_logging(
         uvicorn_logger = logging.getLogger(name)
         uvicorn_logger.handlers.clear()
         uvicorn_logger.propagate = True
-    # At INFO httpx would log every Twilio media URL it fetches.
-    for name in ("httpx", "httpx2", "httpcore"):
+    # Third-party loggers stay at WARNING even with LOG_LEVEL=DEBUG: at INFO/DEBUG they log
+    # media URLs and full request bodies (base64 images, captions, transcribed text).
+    for name in ("httpx", "httpx2", "httpcore", "twilio", "anthropic", "langsmith"):
         logging.getLogger(name).setLevel(logging.WARNING)
-    logging.getLogger("twilio").setLevel(logging.WARNING)
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:

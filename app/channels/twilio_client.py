@@ -4,10 +4,13 @@ See docs/twilio.md (§6 media, §7 sending and status callbacks).
 """
 
 import asyncio
+import re
 import time
 from typing import Literal, Protocol
+from urllib.parse import urlsplit
 
 import httpx
+from twilio.http.http_client import TwilioHttpClient
 from twilio.rest import Client
 
 from app.agent.schemas import ImageInput
@@ -21,6 +24,15 @@ log = get_logger(__name__)
 MessageKind = Literal["ack", "progress", "final", "help", "error"]
 
 DOWNLOAD_TIMEOUT_SECONDS = 15
+SEND_TIMEOUT_SECONDS = 15
+# Twilio media URLs live on api.twilio.com; never send our credentials anywhere else.
+TWILIO_MEDIA_HOST = "api.twilio.com"
+
+_PHONE = re.compile(r"\+\d{8,15}")
+
+
+def _mask_numbers(text: str) -> str:
+    return _PHONE.sub(lambda m: mask_number(m.group(0)), text)
 
 
 class MessagingGateway(Protocol):
@@ -51,6 +63,8 @@ class TwilioGateway:
             self._client = Client(
                 self._settings.twilio_account_sid,
                 self._settings.twilio_auth_token.get_secret_value(),
+                # Default is no timeout: a hung request would hold the user's lock forever.
+                http_client=TwilioHttpClient(timeout=SEND_TIMEOUT_SECONDS),
             )
         return self._client
 
@@ -70,7 +84,8 @@ class TwilioGateway:
                 kind=kind,
                 to=mask_number(to),
                 error_code=getattr(e, "code", None),
-                error=str(getattr(e, "msg", "") or e),
+                # Twilio error texts can contain the recipient's number.
+                error=_mask_numbers(str(getattr(e, "msg", "") or e)),
                 ms=round((time.perf_counter() - start) * 1000),
             )
             return None
@@ -86,6 +101,10 @@ class TwilioGateway:
 
     async def download_image(self, media: MediaRef) -> ImageInput:
         start = time.perf_counter()
+        url = urlsplit(media.url)
+        if url.scheme != "https" or url.hostname != TWILIO_MEDIA_HOST:
+            log.warning("media.rejected", reason="download_failed", error="not_a_twilio_url")
+            raise MediaRejected("download_failed")
         try:
             response = await self._http.get(
                 media.url,

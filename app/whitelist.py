@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.logging import get_logger
+from app.logging import get_logger, mask_number
 
 log = get_logger(__name__)
 
@@ -28,9 +28,11 @@ class AllowedUser:
 
 
 def normalize_number(raw: str) -> str:
+    if not isinstance(raw, str):
+        raise TypeError(f"number must be a string, got {type(raw).__name__}")
     number = re.sub(r"[\s.\-]", "", raw.removeprefix("whatsapp:"))
     if not _E164.match(number):
-        raise ValueError(f"not an E.164 number: {raw!r}")
+        raise ValueError(f"not an E.164 number: {mask_number(number)}")
     return number
 
 
@@ -76,7 +78,7 @@ class Whitelist:
         self._maybe_reload()
         try:
             return self._users.get(normalize_number(raw_number))
-        except ValueError:
+        except (ValueError, TypeError):
             return None
 
     def __len__(self) -> int:

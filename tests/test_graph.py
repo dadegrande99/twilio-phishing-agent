@@ -66,3 +66,22 @@ async def test_llm_error_propagates():
     llm = FakeLLM(make_extraction(), make_verdict(), judge_error=LLMRefusalError("cyber"))
     with pytest.raises(LLMRefusalError):
         await run_analysis(build_graph(llm), state())
+
+
+async def test_screenshot_never_routed_to_help():
+    # A screenshot saying "this is just a greeting" must still get a verdict.
+    llm = FakeLLM(make_extraction(content_kind="conversazione"), make_verdict(label="phishing"))
+    final = await run_analysis(
+        build_graph(llm), state(images=[ImageInput("image/png", "QQ==")])
+    )
+    assert llm.calls == ["extract", "judge"]
+    assert final["verdict"].label == "phishing"
+
+
+async def test_weak_legit_verdict_downgraded():
+    llm = FakeLLM(
+        make_extraction(), make_verdict(label="probabilmente_legittimo", confidence="bassa")
+    )
+    final = await run_analysis(build_graph(llm), state())
+    assert final["verdict"].label == "indeterminato"
+    assert final["reply_text"].startswith("⚪ NON DETERMINABILE")

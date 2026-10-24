@@ -57,3 +57,12 @@ def test_request_is_logged(settings):
     with structlog.testing.capture_logs() as logs:
         client.get("/health")
     assert any(e["event"] == "http.request" and e["path"] == "/health" for e in logs)
+
+
+def test_debug_not_reachable_through_tunnel(settings):
+    # ngrok adds X-Forwarded-For: debug must only answer local requests.
+    settings.debug = True
+    r = client_for(settings).post(
+        "/debug/analyze", data={"caption": "x"}, headers={"X-Forwarded-For": "203.0.113.5"}
+    )
+    assert r.status_code == 404

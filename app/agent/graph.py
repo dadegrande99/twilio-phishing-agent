@@ -35,6 +35,11 @@ def _timed(name: str, fn: NodeFn) -> NodeFn:
     return node
 
 
+def _needs_verdict(state: AnalysisState, extraction) -> bool:
+    # A screenshot always gets a verdict: text inside it could claim to be "just a greeting".
+    return bool(state.get("images")) or extraction.content_kind == "messaggio_da_analizzare"
+
+
 def build_graph(llm: AnalysisLLM):
     async def extract(state: AnalysisState, config: RunnableConfig) -> dict:
         extraction = await llm.extract(state.get("caption"), state.get("images", []))
@@ -48,7 +53,7 @@ def build_graph(llm: AnalysisLLM):
             n_phones=len(extraction.phone_numbers),
             **({"text": extraction.text, "urls": extraction.urls} if log_content else {}),
         )
-        if extraction.content_kind == "messaggio_da_analizzare":
+        if _needs_verdict(state, extraction):
             get_stream_writer()(
                 {"type": "extracted", "progress_text": format_progress(extraction)}
             )
@@ -56,6 +61,10 @@ def build_graph(llm: AnalysisLLM):
 
     async def judge(state: AnalysisState, config: RunnableConfig) -> dict:
         verdict = await llm.judge(state["extraction"], state.get("caption"))
+        if verdict.label == "probabilmente_legittimo" and verdict.confidence == "bassa":
+            # Spec anti-goal: weak evidence must never be shown as a green verdict.
+            log.info("verdict.downgraded", from_label=verdict.label, to_label="indeterminato")
+            verdict = verdict.model_copy(update={"label": "indeterminato"})
         log.info(
             "verdict.result",
             label=verdict.label,
@@ -71,7 +80,7 @@ def build_graph(llm: AnalysisLLM):
         return {"reply_text": HELP_TEXT}
 
     def route(state: AnalysisState) -> str:
-        return "help" if state["extraction"].content_kind == "conversazione" else "judge"
+        return "judge" if _needs_verdict(state, state["extraction"]) else "help"
 
     graph = StateGraph(AnalysisState)
     graph.add_node("extract", _timed("extract", extract))

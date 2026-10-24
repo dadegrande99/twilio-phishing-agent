@@ -7,13 +7,20 @@ from typing import Annotated
 from uuid import uuid4
 
 import structlog
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 from app.agent.graph import run_analysis
 from app.agent.llm import LLMRefusalError
 from app.media import MediaRejected, validate_image
 
-router = APIRouter()
+
+def _local_only(request: Request) -> None:
+    """Hide the endpoint from requests coming through ngrok (it adds X-Forwarded-For)."""
+    if "x-forwarded-for" in request.headers:
+        raise HTTPException(404)
+
+
+router = APIRouter(dependencies=[Depends(_local_only)])
 
 _REJECT_STATUS = {"unsupported_type": 415, "too_large": 413}
 

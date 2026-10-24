@@ -103,3 +103,28 @@ def test_deleted_file_keeps_previous_list(wl_path):
     wl = Whitelist(wl_path)
     wl_path.unlink()
     assert wl.lookup("+393331234567").name == "Davide"
+
+
+def test_non_string_number_fails_closed(tmp_path):
+    path = tmp_path / "w.json"
+    write(path, [{"number": 393331234567, "name": "x"}])
+    with pytest.raises(WhitelistError):
+        Whitelist(path)
+
+
+def test_non_string_number_on_reload_logs_failure(wl_path):
+    wl = Whitelist(wl_path)
+    write(wl_path, [{"number": 393409876543, "name": "B"}])
+    touch_later(wl_path)
+    with structlog.testing.capture_logs() as logs:
+        assert wl.lookup("+393331234567").name == "Davide"
+    assert any(e["event"] == "whitelist.reload_failed" for e in logs)
+
+
+def test_reload_failure_does_not_log_raw_number(wl_path):
+    wl = Whitelist(wl_path)
+    write(wl_path, [{"number": "+39 333 12345x", "name": "B"}])
+    touch_later(wl_path)
+    with structlog.testing.capture_logs() as logs:
+        wl.lookup("+393331234567")
+    assert "12345x" not in str(logs)

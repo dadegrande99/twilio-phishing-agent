@@ -103,3 +103,35 @@ async def test_download_wrong_type_rejected(settings):
     with pytest.raises(MediaRejected) as e:
         await gw.download_image(MEDIA)
     assert e.value.reason == "unsupported_type"
+
+
+def test_lazy_twilio_client_has_timeout(settings):
+    client = TwilioGateway(settings)._twilio()
+    assert client.http_client.timeout == 15
+
+
+async def test_send_failure_masks_numbers_in_error(settings):
+    tw = MagicMock()
+    tw.messages.create.side_effect = TwilioRestException(
+        400, "u", msg="The 'To' number +393331234567 is not a valid phone number.", code=21211
+    )
+    with structlog.testing.capture_logs() as logs:
+        await TwilioGateway(settings, client=tw).send("+393331234567", "x", "ack")
+    assert "+393331234567" not in str(logs)
+    assert "+39***4567" in str(logs)
+
+
+@pytest.mark.parametrize(
+    "url", ["https://attacker.example/m/ME1", "http://api.twilio.com/m/ME1"]
+)
+async def test_download_refuses_non_twilio_urls(settings, url):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, content=b"x", headers={"content-type": "image/png"})
+
+    with pytest.raises(MediaRejected) as e:
+        await gateway_with_http(settings, handler).download_image(MediaRef(url, "image/png"))
+    assert e.value.reason == "download_failed"
+    assert calls == []  # credentials never sent
