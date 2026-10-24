@@ -75,7 +75,7 @@ async def test_extract_calls_parse_with_schema_and_effort():
     assert kwargs["output_config"]["format"]["type"] == "json_schema"
     assert "content_kind" in kwargs["output_config"]["format"]["schema"]["properties"]
     assert kwargs["system"] == EXTRACT_SYSTEM
-    assert kwargs["fallbacks"] == "default"
+    assert kwargs["fallbacks"] == "default"  # sonnet supports server-side fallback
     assert "temperature" not in kwargs and "tool_choice" not in kwargs
     assert isinstance(result, Extraction)
 
@@ -130,3 +130,16 @@ async def test_logs_usage():
         await AnthropicAnalysisLLM(fake_client(make_extraction()), "m").extract("x", [])
     ev = next(entry for entry in logs if entry["event"] == "llm.call.completed")
     assert ev["input_tokens"] == 10 and ev["output_tokens"] == 5 and ev["node"] == "extract"
+
+
+async def test_haiku_has_no_fallback_params():
+    client = fake_client(make_extraction())
+    await AnthropicAnalysisLLM(client, "claude-haiku-5-5").extract("x", [])
+    kwargs = client.beta.messages.create.call_args.kwargs
+    assert "fallbacks" not in kwargs and "betas" not in kwargs
+
+
+async def test_sonnet_keeps_fallback_params():
+    client = fake_client(make_extraction())
+    await AnthropicAnalysisLLM(client, "claude-sonnet-5-5").extract("x", [])
+    assert client.beta.messages.create.call_args.kwargs["fallbacks"] == "default"

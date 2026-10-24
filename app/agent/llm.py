@@ -26,6 +26,11 @@ MAX_TOKENS = 16000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
+def supports_server_fallback(model: str) -> bool:
+    """Haiku has no server-side fallback (a list of fallbacks even returns a 400)."""
+    return not model.startswith("claude-haiku")
+
+
 class LLMRefusalError(Exception):
     def __init__(self, category: str | None):
         super().__init__(f"model refused (category={category})")
@@ -74,6 +79,11 @@ class AnthropicAnalysisLLM:
         # messages.create + our own parsing instead of messages.parse: parse() validates every
         # text block, so a partial answer from a model that declined before a fallback (or a
         # refusal after some text) would raise before we can inspect stop_reason.
+        fallback = (
+            {"betas": [FALLBACK_BETA], "fallbacks": "default"}
+            if supports_server_fallback(self._model)
+            else {}
+        )
         start = time.perf_counter()
         response = await self._client.beta.messages.create(
             model=self._model,
@@ -81,8 +91,7 @@ class AnthropicAnalysisLLM:
             system=system,
             messages=messages,
             output_config={"effort": effort, "format": to_json_output_format(schema)},
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
+            **fallback,
         )
         log.info(
             "llm.call.completed",

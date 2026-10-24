@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     anthropic_api_key: SecretStr
-    anthropic_model: str = "claude-sonnet-5-5"
+    anthropic_model: str = "claude-haiku-5-5"
 
     twilio_account_sid: str
     twilio_auth_token: SecretStr

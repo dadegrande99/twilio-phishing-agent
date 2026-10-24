@@ -12,7 +12,7 @@ def client_for(settings, llm=None) -> TestClient:
 def test_health(settings):
     r = client_for(settings).get("/health")
     assert r.status_code == 200
-    assert r.json()["status"] == "ok" and r.json()["model"] == "claude-sonnet-5-5"
+    assert r.json()["status"] == "ok" and r.json()["model"] == "claude-haiku-5-5"
 
 
 def test_debug_disabled_by_default(settings):

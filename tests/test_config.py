@@ -5,7 +5,7 @@ from app.config import Settings
 
 
 def test_defaults(settings):
-    assert settings.anthropic_model == "claude-sonnet-5-5"
+    assert settings.anthropic_model == "claude-haiku-5-5"
     assert settings.validate_twilio_signature is True
     assert settings.twilio_whatsapp_from == "whatsapp:+14155238886"
 
