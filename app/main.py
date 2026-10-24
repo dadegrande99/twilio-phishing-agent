@@ -38,6 +38,7 @@ def create_app(
         # Exports .env into os.environ so LangSmith (LANGSMITH_*) can read it too.
         load_dotenv()
         settings = Settings()
+    settings.check_channel_credentials()
     configure_logging(settings.log_level, settings.log_format, settings.log_file)
 
     app = FastAPI(title="WhatsApp Phishing Agent", docs_url="/docs" if settings.debug else None)

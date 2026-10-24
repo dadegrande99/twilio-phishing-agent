@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,8 +43,12 @@ class Settings(BaseSettings):
     def _strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
 
-    @model_validator(mode="after")
-    def _require_channel_credentials(self) -> "Settings":
+    def check_channel_credentials(self) -> None:
+        """Raise if the active channel's credentials are missing (called at app startup).
+
+        Not a model validator: tools that only need Claude (evals) must load settings
+        without WhatsApp credentials.
+        """
         required = {
             "twilio": {
                 "TWILIO_ACCOUNT_SID": self.twilio_account_sid,
@@ -60,4 +64,3 @@ class Settings(BaseSettings):
         missing = [name for name, value in required.items() if not value]
         if missing:
             raise ValueError(f"CHANNEL={self.channel} requires: {', '.join(missing)}")
-        return self
