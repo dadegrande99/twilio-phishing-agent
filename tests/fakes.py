@@ -105,3 +105,26 @@ class FakeGateway:
         if isinstance(result, Exception):
             raise result
         return result
+
+
+def text_msg(wamid: str, from_: str, body: str) -> dict:
+    return {"from": from_, "id": wamid, "timestamp": "1700000000", "type": "text",
+            "text": {"body": body}}
+
+
+def meta_payload(messages=None, statuses=None, contacts=None) -> dict:
+    """A WhatsApp Cloud API webhook payload with the real nesting."""
+    value = {
+        "messaging_product": "whatsapp",
+        "metadata": {"display_phone_number": "15550001111", "phone_number_id": "PNID"},
+    }
+    if contacts is not None:
+        value["contacts"] = contacts
+    if messages is not None:
+        value["messages"] = messages
+    if statuses is not None:
+        value["statuses"] = statuses
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [{"id": "WABA", "changes": [{"field": "messages", "value": value}]}],
+    }
