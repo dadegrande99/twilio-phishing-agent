@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,9 +13,19 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr
     anthropic_model: str = "claude-haiku-5-5"
 
-    twilio_account_sid: str
-    twilio_auth_token: SecretStr
+    # Which WhatsApp provider this process talks to.
+    channel: Literal["twilio", "meta"] = "twilio"
+
+    twilio_account_sid: str = ""
+    twilio_auth_token: SecretStr = SecretStr("")
     twilio_whatsapp_from: str = "whatsapp:+14155238886"
+
+    meta_access_token: SecretStr = SecretStr("")
+    meta_phone_number_id: str = ""
+    meta_app_secret: SecretStr = SecretStr("")
+    meta_verify_token: SecretStr = SecretStr("")
+    meta_graph_version: str = "v26.0"
+    validate_meta_signature: bool = True
 
     public_base_url: str
     validate_twilio_signature: bool = True
@@ -32,3 +42,22 @@ class Settings(BaseSettings):
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
+
+    @model_validator(mode="after")
+    def _require_channel_credentials(self) -> "Settings":
+        required = {
+            "twilio": {
+                "TWILIO_ACCOUNT_SID": self.twilio_account_sid,
+                "TWILIO_AUTH_TOKEN": self.twilio_auth_token.get_secret_value(),
+            },
+            "meta": {
+                "META_ACCESS_TOKEN": self.meta_access_token.get_secret_value(),
+                "META_PHONE_NUMBER_ID": self.meta_phone_number_id,
+                "META_APP_SECRET": self.meta_app_secret.get_secret_value(),
+                "META_VERIFY_TOKEN": self.meta_verify_token.get_secret_value(),
+            },
+        }[self.channel]
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            raise ValueError(f"CHANNEL={self.channel} requires: {', '.join(missing)}")
+        return self

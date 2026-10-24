@@ -96,7 +96,7 @@ class FakeGateway:
         return f"SM{len(self.sent)}"
 
     async def download_image(self, media):
-        result = self.images[media.url]
+        result = self.images[media.locator]
         if isinstance(result, Exception):
             raise result
         return result

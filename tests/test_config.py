@@ -30,3 +30,23 @@ def test_missing_required_key_fails(monkeypatch):
             twilio_auth_token="t",
             public_base_url="https://x",
         )
+
+
+def test_meta_channel_requires_meta_credentials():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, anthropic_api_key="k", public_base_url="https://x", channel="meta")
+
+
+def test_meta_channel_does_not_require_twilio(meta_settings):
+    assert meta_settings.channel == "meta" and meta_settings.twilio_account_sid == ""
+    assert meta_settings.meta_graph_version == "v26.0"
+    assert meta_settings.validate_meta_signature is True
+
+
+def test_twilio_channel_requires_twilio_credentials():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, anthropic_api_key="k", public_base_url="https://x")
+
+
+def test_default_channel_is_twilio(settings):
+    assert settings.channel == "twilio"

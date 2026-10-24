@@ -22,8 +22,8 @@ from app.agent.formatting import (
 )
 from app.agent.graph import run_analysis
 from app.agent.llm import LLMRefusalError
+from app.channels.models import InboundMessage
 from app.channels.twilio_client import MessagingGateway
-from app.channels.twilio_security import InboundMessage
 from app.config import Settings
 from app.logging import get_logger, mask_number
 from app.media import ALLOWED_IMAGE_TYPES, MediaRejected, normalize_content_type

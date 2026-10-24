@@ -14,7 +14,8 @@ from twilio.http.http_client import TwilioHttpClient
 from twilio.rest import Client
 
 from app.agent.schemas import ImageInput
-from app.channels.twilio_security import MediaRef, public_url
+from app.channels.models import MediaRef
+from app.channels.twilio_security import public_url
 from app.config import Settings
 from app.logging import get_logger, mask_number
 from app.media import MediaRejected, normalize_content_type, validate_image
@@ -101,13 +102,13 @@ class TwilioGateway:
 
     async def download_image(self, media: MediaRef) -> ImageInput:
         start = time.perf_counter()
-        url = urlsplit(media.url)
+        url = urlsplit(media.locator)
         if url.scheme != "https" or url.hostname != TWILIO_MEDIA_HOST:
             log.warning("media.rejected", reason="download_failed", error="not_a_twilio_url")
             raise MediaRejected("download_failed")
         try:
             response = await self._http.get(
-                media.url,
+                media.locator,
                 auth=(
                     self._settings.twilio_account_sid,
                     self._settings.twilio_auth_token.get_secret_value(),

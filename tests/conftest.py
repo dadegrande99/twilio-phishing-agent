@@ -52,3 +52,18 @@ def app_client(settings, gateway):
         whitelist=Whitelist(settings.whitelist_path),
     )
     return TestClient(app)
+
+
+@pytest.fixture
+def meta_settings(settings) -> Settings:
+    return Settings(
+        _env_file=None,
+        anthropic_api_key="test-key",
+        channel="meta",
+        meta_access_token="meta-token",
+        meta_phone_number_id="PNID",
+        meta_app_secret="app-secret",
+        meta_verify_token="verify-me",
+        public_base_url="https://test.example",
+        whitelist_path=settings.whitelist_path,
+    )
