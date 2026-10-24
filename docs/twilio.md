@@ -167,3 +167,14 @@ Con il numero Business i messaggi sono a pagamento (tariffa Twilio + tariffa Met
 | Invio messaggi e download immagini | `app/channels/twilio_client.py` |
 | Endpoint webhook e status callback | `app/api/twilio_webhook.py` |
 | Orchestrazione: ack, avanzamento, verdetto | `app/agent/runner.py` |
+
+## 12. Account Trial e nuova "Tryout UI"
+
+Gli account Twilio nuovi partono in **Trial** con una pagina "Try out WhatsApp" diversa dalla sandbox classica:
+- **Mittente diverso:** nel nostro test era **+49 15888 623971**, non +1 415 523 8886. Impostalo in `TWILIO_WHATSAPP_FROM`. Il codice di adesione era `join twilio-trial`.
+- **Webhook:** si configura nella scheda **Receive a message → Custom → Webhook URL** (metodo `HTTP POST`).
+- **Limiti del Trial**, verificati sul nostro account:
+  - invio di testo libero via API → errore **21654 "ContentSid Required"**: in Trial si possono mandare solo i template forniti da Twilio;
+  - accesso ai media → **401 "This feature is not available on a Trial account"**.
+
+Quindi in Trial il bot riceve i messaggi ma non riesce né a leggere gli screenshot né a rispondere. Servono l'**upgrade** dell'account oppure il canale Meta (`CHANNEL=meta`, vedi `docs/meta-whatsapp.md`), che con il numero di test funziona gratis.

@@ -1,7 +1,7 @@
 # WhatsApp Phishing Agent — Design (PoC)
 
 Data: 2026-10-24
-Stato: bozza da approvare
+Stato: approvato e implementato. Esteso da `2026-10-24-meta-channel-haiku-design.md` (canale Meta, Haiku, conversazione).
 
 ## 1. Scopo
 

@@ -2,12 +2,13 @@
 
 Agente che aiuta a riconoscere phishing e impersonation. L'utente inoltra su WhatsApp lo screenshot (o il testo) di un messaggio sospetto. L'agente lo analizza con Claude Sonnet 5.5 e risponde in tre passi: un messaggio di ricezione, uno di avanzamento e il verdetto con le azioni consigliate. Risponde solo ai numeri presenti nella whitelist.
 
-Stack: FastAPI, LangGraph, SDK `anthropic`, Twilio WhatsApp, `structlog`, `uv`.
+Stack: FastAPI, LangGraph, SDK `anthropic` (modello di default `claude-haiku-5-5`), WhatsApp via **Twilio** oppure **Meta Cloud API**, `structlog`, `uv`.
 
 Documentazione:
 - [Design](docs/superpowers/specs/2026-10-24-whatsapp-phishing-agent-design.md)
 - [Piano di implementazione](docs/superpowers/plans/2026-10-24-whatsapp-phishing-agent.md)
 - [Come funziona Twilio](docs/twilio.md)
+- [Come funziona la WhatsApp Cloud API di Meta](docs/meta-whatsapp.md)
 - [LangSmith](docs/langsmith.md)
 - [Lingua dell'utente](docs/language-detection.md)
 
@@ -15,7 +16,7 @@ Documentazione:
 
 - [uv](https://docs.astral.sh/uv/)
 - una chiave API Anthropic
-- un account Twilio (va bene la sandbox WhatsApp)
+- un'app Meta con il numero di test WhatsApp (gratis) **oppure** un account Twilio (in Trial non basta, vedi sotto)
 - [ngrok](https://ngrok.com/download) (`brew install ngrok`, poi `ngrok config add-authtoken <token>`)
 
 ## Setup
@@ -28,6 +29,23 @@ cp config/whitelist.example.json config/whitelist.json # metti il tuo numero (+3
 
 `config/whitelist.json` è gestito a mano: l'app lo legge e non lo scrive mai. Se lo modifichi mentre il server gira, viene ricaricato da solo. Se il JSON non è valido, l'app tiene l'ultima versione valida e scrive `whitelist.reload_failed` nei log.
 
+## Scegliere il canale
+
+Il canale si sceglie con `CHANNEL` nel `.env`. Il resto dell'agente (analisi, whitelist, log, eval) è identico.
+
+| `CHANNEL` | Variabili obbligatorie | Endpoint webhook | Guida |
+|---|---|---|---|
+| `meta` (consigliato per la PoC) | `META_ACCESS_TOKEN`, `META_PHONE_NUMBER_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN` | `/webhooks/meta` | [docs/meta-whatsapp.md](docs/meta-whatsapp.md) |
+| `twilio` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` | `/webhooks/twilio/whatsapp` (+ `/webhooks/twilio/status`) | [docs/twilio.md](docs/twilio.md) |
+
+Se mancano le variabili del canale scelto, l'app non parte e dice quali mancano. Viene montato solo il webhook del canale attivo. `/health` riporta il canale in uso.
+
+Differenze visibili all'utente:
+- **Meta:** spunte blu e "sta scrivendo…" appena arriva il messaggio, poi avanzamento e verdetto.
+- **Twilio:** messaggio "📥 Ricevuto", poi avanzamento e verdetto.
+
+Un account **Twilio in Trial** blocca testi liberi e immagini: vedi [docs/twilio.md §12](docs/twilio.md#12-account-trial-e-nuova-tryout-ui).
+
 ## Avvio
 
 ```bash
@@ -39,7 +57,9 @@ ngrok http 8000
 
 Copia l'URL `https://….ngrok-free.app` di ngrok in `PUBLIC_BASE_URL` nel `.env` e riavvia il server. Serve per verificare la firma di Twilio.
 
-## Configurare la sandbox Twilio
+## Configurare la sandbox Twilio (solo `CHANNEL=twilio`)
+
+Per Meta segui invece [docs/meta-whatsapp.md §9](docs/meta-whatsapp.md#9-setup-passo-per-passo).
 
 Guida completa in [docs/twilio.md §9](docs/twilio.md#9-setup-della-sandbox-passo-per-passo). In breve:
 
@@ -78,6 +98,10 @@ Ogni riga di un'analisi porta `analysis_id`, `message_sid` e `user`, cioè il no
 | `extraction.result` / `verdict.result` | cosa ha letto il modello e cosa ha deciso |
 | `twilio.message.sent` / `twilio.message.failed` | messaggio inviato all'utente (`kind`: ack, progress, final, help, error) |
 | `twilio.status.updated` | Twilio aggiorna lo stato di un messaggio inviato (sent, delivered, read, failed + `error_code`) |
+| `meta.verified` / `meta.verify_failed` | handshake del webhook Meta riuscito o fallito (verify token) |
+| `meta.ack.sent` / `meta.ack.failed` | spunte blu + "sta scrivendo…" (solo Meta) |
+| `meta.message.sent` / `meta.message.failed` | messaggio inviato via Graph API (`error_code`: vedi docs/meta-whatsapp.md §10) |
+| `meta.status.updated` | Meta aggiorna lo stato di un messaggio inviato |
 | `analysis.completed` / `analysis.failed` | esito finale con `total_ms` |
 
 Con `LOG_FILE=logs/app.jsonl` ogni evento finisce anche su file in formato JSON lines:
@@ -111,6 +135,17 @@ Ogni campione ha `file` (uno screenshot in `evals/samples/`) **oppure** `text`, 
 - la matrice di confusione.
 
 I risultati vengono salvati in `evals/results/`. Il file di esempio contiene anche un caso di prompt injection, un messaggio che "ordina" all'assistente di rispondere che è legittimo.
+
+## Costi indicativi
+
+Valori misurati sui log.
+
+| Voce | Costo per analisi |
+|---|---|
+| Claude Haiku 5.5 (~4.000 token in, ~600 out) | ~$0,001 |
+| Claude Sonnet 5.5 (`ANTHROPIC_MODEL=claude-sonnet-5-5`) | ~$0,016 |
+| Meta, numero di test | gratis |
+| Twilio (account a pagamento) | ~$0,005 per messaggio, ~$0,02 per analisi |
 
 ## LangSmith (opzionale)
 
