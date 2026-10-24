@@ -70,3 +70,33 @@ class FakeLLM:
         if self.judge_error:
             raise self.judge_error
         return self.verdict
+
+
+class FakeGateway:
+    """MessagingGateway double: records sent messages, serves images by URL."""
+
+    def __init__(
+        self,
+        *,
+        images: dict | None = None,
+        fail_kinds: set[str] | None = None,
+        send_delay: float = 0,
+    ):
+        self.images = images or {}
+        self.fail_kinds = fail_kinds or set()
+        self.send_delay = send_delay
+        self.sent: list[tuple[str, str, str]] = []
+
+    async def send(self, to: str, body: str, kind: str) -> str | None:
+        if self.send_delay:
+            await asyncio.sleep(self.send_delay)
+        if kind in self.fail_kinds:
+            return None
+        self.sent.append((to, body, kind))
+        return f"SM{len(self.sent)}"
+
+    async def download_image(self, media):
+        result = self.images[media.url]
+        if isinstance(result, Exception):
+            raise result
+        return result
