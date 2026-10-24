@@ -5,4 +5,9 @@ router = APIRouter()
 
 @router.get("/health")
 async def health(request: Request) -> dict:
-    return {"status": "ok", "model": request.app.state.settings.anthropic_model}
+    state = request.app.state
+    return {
+        "status": "ok",
+        "model": state.settings.anthropic_model,
+        "whitelist_entries": len(state.whitelist),
+    }

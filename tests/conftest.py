@@ -28,3 +28,27 @@ def settings(tmp_path) -> Settings:
         public_base_url="https://test.example",
         whitelist_path=whitelist_path,
     )
+
+
+@pytest.fixture
+def gateway():
+    from tests.fakes import FakeGateway
+
+    return FakeGateway()
+
+
+@pytest.fixture
+def app_client(settings, gateway):
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+    from app.whitelist import Whitelist
+    from tests.fakes import FakeLLM, make_extraction, make_verdict
+
+    app = create_app(
+        settings,
+        llm=FakeLLM(make_extraction(), make_verdict()),
+        gateway=gateway,
+        whitelist=Whitelist(settings.whitelist_path),
+    )
+    return TestClient(app)

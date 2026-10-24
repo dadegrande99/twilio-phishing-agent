@@ -10,14 +10,23 @@ from fastapi import FastAPI, Request
 
 from app.agent.graph import build_graph
 from app.agent.llm import AnalysisLLM, create_llm
-from app.api import debug, health
+from app.agent.runner import AnalysisRunner, MessageDeduper
+from app.api import debug, health, twilio_webhook
+from app.channels.twilio_client import MessagingGateway, TwilioGateway
 from app.config import Settings
 from app.logging import configure_logging, get_logger
+from app.whitelist import Whitelist
 
 log = get_logger(__name__)
 
 
-def create_app(settings: Settings | None = None, *, llm: AnalysisLLM | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    llm: AnalysisLLM | None = None,
+    gateway: MessagingGateway | None = None,
+    whitelist: Whitelist | None = None,
+) -> FastAPI:
     if settings is None:
         # Exports .env into os.environ so LangSmith (LANGSMITH_*) can read it too.
         load_dotenv()
@@ -27,6 +36,12 @@ def create_app(settings: Settings | None = None, *, llm: AnalysisLLM | None = No
     app = FastAPI(title="WhatsApp Phishing Agent", docs_url="/docs" if settings.debug else None)
     app.state.settings = settings
     app.state.graph = build_graph(llm or create_llm(settings))
+    # Fails closed: an invalid or missing whitelist stops the app from starting.
+    app.state.whitelist = whitelist if whitelist is not None else Whitelist(settings.whitelist_path)
+    app.state.deduper = MessageDeduper()
+    app.state.runner = AnalysisRunner(
+        app.state.graph, gateway or TwilioGateway(settings), settings
+    )
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
@@ -42,6 +57,7 @@ def create_app(settings: Settings | None = None, *, llm: AnalysisLLM | None = No
         return response
 
     app.include_router(health.router)
+    app.include_router(twilio_webhook.router)
     if settings.debug:
         app.include_router(debug.router)
 
