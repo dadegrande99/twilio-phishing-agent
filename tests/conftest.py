@@ -7,6 +7,13 @@ from app.config import Settings
 WHITELISTED_NUMBER = "+393331234567"
 
 
+@pytest.fixture(autouse=True)
+def isolated_env(monkeypatch):
+    """Keep real environment variables (e.g. from a developer's .env) out of the tests."""
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
 @pytest.fixture
 def settings(tmp_path) -> Settings:
     whitelist_path = tmp_path / "whitelist.json"

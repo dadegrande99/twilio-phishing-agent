@@ -74,7 +74,8 @@ def configure_logging(
         uvicorn_logger.handlers.clear()
         uvicorn_logger.propagate = True
     # At INFO httpx would log every Twilio media URL it fetches.
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    for name in ("httpx", "httpx2", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     logging.getLogger("twilio").setLevel(logging.WARNING)
 
 

@@ -3,16 +3,16 @@
 import os
 
 import pytest
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 from app.agent.llm import create_llm
 from app.config import Settings
 
-load_dotenv()
+_API_KEY = os.getenv("ANTHROPIC_API_KEY") or dotenv_values().get("ANTHROPIC_API_KEY")
 
 pytestmark = [
     pytest.mark.live,
-    pytest.mark.skipif(not os.getenv("ANTHROPIC_API_KEY"), reason="ANTHROPIC_API_KEY not set"),
+    pytest.mark.skipif(not _API_KEY, reason="ANTHROPIC_API_KEY not set"),
 ]
 
 
