@@ -124,8 +124,8 @@ Limite: 1600 caratteri per messaggio. Il nostro messaggio finale resta sotto i 1
 | Sintomo | Causa probabile | Cosa fare |
 |---|---|---|
 | Tutti i webhook ricevono 403 | `PUBLIC_BASE_URL` diverso dall'URL configurato su Twilio (ngrok riavviato) | Allinea `.env` e console, riavvia il server |
-| Nessun log `webhook.received` | URL webhook sbagliato in console, oppure ngrok spento | Controlla la console Twilio e l'interfaccia di ngrok (`http://127.0.0.1:4040`) |
-| `webhook.not_whitelisted` per il tuo numero | Numero non in `config/whitelist.json`, o non in formato E.164 | Aggiungi `+39...` senza spazi |
+| Nessun log `inbound.received` | URL webhook sbagliato in console, oppure ngrok spento | Controlla la console Twilio e l'interfaccia di ngrok (`http://127.0.0.1:4040`) |
+| `inbound.not_whitelisted` per il tuo numero | Numero non in `config/whitelist.json`, o non in formato E.164 | Aggiungi `+39...` senza spazi |
 | Errore **63015** in `twilio.status.updated` | Il destinatario non si è unito alla sandbox, o l'adesione è scaduta | Rimanda `join <parola>` al numero sandbox |
 | Errore **63016** | Messaggio fuori dalla finestra di 24 ore | Non dovrebbe capitare: l'utente ha appena scritto |
 | `media.rejected` con `reason=download_failed status=401` | Download con credenziali sbagliate | Controlla SID/token nel `.env` |

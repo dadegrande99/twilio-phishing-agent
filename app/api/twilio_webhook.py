@@ -7,6 +7,7 @@ talks to the user through the Twilio REST API. See docs/twilio.md §4.
 
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 
+from app.api.inbound import accept_inbound
 from app.channels.twilio_security import is_valid_signature, parse_inbound, public_url
 from app.logging import get_logger, mask_number
 
@@ -53,25 +54,10 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks) 
         return Response(status_code=403)
 
     inbound = parse_inbound(params)
-    log.info(
-        "webhook.received",
-        message_sid=inbound.message_sid,
-        num_media=len(inbound.media),
-        has_body=bool(inbound.body),
-    )
-
     state = request.app.state
-    user = state.whitelist.lookup(inbound.from_number)
-    if user is None:
-        # Never answer numbers outside the whitelist, not even with an error.
-        log.info("webhook.not_whitelisted", user_masked=mask_number(inbound.from_number))
-        return _twiml()
-
-    if not state.deduper.first_time(inbound.message_sid):
-        log.info("webhook.duplicate", message_sid=inbound.message_sid)
-        return _twiml()
-
-    background_tasks.add_task(state.runner.handle, inbound, user)
+    user = accept_inbound(state, inbound, source="twilio_webhook")
+    if user is not None:
+        background_tasks.add_task(state.runner.handle, inbound, user)
     return _twiml()
 
 

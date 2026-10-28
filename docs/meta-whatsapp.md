@@ -157,13 +157,13 @@ L'interfaccia di Meta cambia spesso: i nomi delle voci possono essere leggerment
 
 | Sintomo nei log | Causa | Cosa fare |
 |---|---|---|
-| Nessun `webhook.received` | Campo `messages` non sottoscritto, URL sbagliato o ngrok spento | §9 passi 7-8; controlla `http://127.0.0.1:4040` |
+| Nessun `inbound.received` | Campo `messages` non sottoscritto, URL sbagliato o ngrok spento | §9 passi 7-8; controlla `http://127.0.0.1:4040` |
 | `meta.verify_failed` | Il verify token in Dashboard non coincide con `META_VERIFY_TOKEN` | Allinea i due valori |
 | `webhook.signature_invalid channel=meta` | `META_APP_SECRET` sbagliato o di un'altra app | Ricopia l'App Secret |
 | `meta.message.failed error_code=190` | Token scaduto o non valido (quello temporaneo dura poco) | Usa il System User token |
 | `meta.message.failed error_code=131030` | Destinatario non tra i 5 numeri verificati del numero di test | Aggiungilo in API Setup |
 | `meta.message.failed error_code=131047` | Fuori dalla finestra di 24 ore | L'utente deve scrivere di nuovo |
-| `webhook.not_whitelisted` | Numero non in `config/whitelist.json` | Aggiungilo in formato `+39…` |
+| `inbound.not_whitelisted` | Numero non in `config/whitelist.json` | Aggiungilo in formato `+39…` |
 
 ## 11. Dove trovi tutto questo nel codice
 

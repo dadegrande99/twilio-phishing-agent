@@ -27,7 +27,11 @@ class Settings(BaseSettings):
     meta_graph_version: str = "v26.0"
     validate_meta_signature: bool = True
 
-    public_base_url: str
+    # How inbound messages reach us: Twilio can be polled, Meta only supports webhooks.
+    inbound_mode: Literal["webhook", "polling"] = "polling"
+    poll_interval_seconds: float = 5
+    # Public (ngrok) URL; only needed in webhook mode.
+    public_base_url: str = ""
     validate_twilio_signature: bool = True
     whitelist_path: Path = Path("config/whitelist.json")
     analysis_timeout_seconds: float = 90
@@ -64,3 +68,10 @@ class Settings(BaseSettings):
         missing = [name for name, value in required.items() if not value]
         if missing:
             raise ValueError(f"CHANNEL={self.channel} requires: {', '.join(missing)}")
+        if self.channel == "meta" and self.inbound_mode == "polling":
+            raise ValueError(
+                "INBOUND_MODE=polling is only supported with CHANNEL=twilio; "
+                "set INBOUND_MODE=webhook"
+            )
+        if self.inbound_mode == "webhook" and not self.public_base_url:
+            raise ValueError("INBOUND_MODE=webhook requires PUBLIC_BASE_URL (your ngrok URL)")

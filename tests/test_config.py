@@ -67,3 +67,26 @@ def test_twilio_channel_requires_twilio_credentials():
 
 def test_default_channel_is_twilio(settings):
     assert settings.channel == "twilio"
+
+
+def test_default_inbound_mode_is_polling():
+    s = Settings(
+        _env_file=None, anthropic_api_key="k", twilio_account_sid="AC", twilio_auth_token="t"
+    )
+    assert s.inbound_mode == "polling" and s.poll_interval_seconds == 5
+    s.check_channel_credentials()  # polling needs no PUBLIC_BASE_URL
+
+
+def test_meta_with_polling_refused(meta_settings):
+    meta_settings.inbound_mode = "polling"
+    with pytest.raises(ValueError, match="INBOUND_MODE=polling"):
+        meta_settings.check_channel_credentials()
+
+
+def test_webhook_mode_requires_public_url():
+    s = Settings(
+        _env_file=None, anthropic_api_key="k", twilio_account_sid="AC", twilio_auth_token="t",
+        inbound_mode="webhook",
+    )
+    with pytest.raises(ValueError, match="PUBLIC_BASE_URL"):
+        s.check_channel_credentials()

@@ -26,6 +26,7 @@ def settings(tmp_path) -> Settings:
         twilio_account_sid="ACtest",
         twilio_auth_token="test-token",
         public_base_url="https://test.example",
+        inbound_mode="webhook",
         whitelist_path=whitelist_path,
     )
 
@@ -65,6 +66,7 @@ def meta_settings(settings) -> Settings:
         meta_app_secret="app-secret",
         meta_verify_token="verify-me",
         public_base_url="https://test.example",
+        inbound_mode="webhook",
         whitelist_path=settings.whitelist_path,
     )
 

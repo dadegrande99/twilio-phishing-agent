@@ -52,13 +52,17 @@ class TwilioGateway:
 
     async def send(self, to: str, body: str, kind: MessageKind) -> str | None:
         start = time.perf_counter()
+        extra = {}
+        if self._settings.inbound_mode == "webhook":
+            # Status updates come back on a webhook; in polling mode there is no public URL.
+            extra["status_callback"] = public_url(self._settings, "/webhooks/twilio/status")
         try:
             message = await asyncio.to_thread(
                 self._twilio().messages.create,
                 from_=self._settings.twilio_whatsapp_from,
                 to=f"whatsapp:{to}",
                 body=body,
-                status_callback=public_url(self._settings, "/webhooks/twilio/status"),
+                **extra,
             )
         except Exception as e:  # noqa: BLE001 - a failed send must never break the analysis
             log.error(

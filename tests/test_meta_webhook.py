@@ -66,7 +66,7 @@ def test_not_whitelisted_gets_nothing(meta_client, meta_gateway):
         r = signed(meta_client, meta_payload(messages=[text_msg("w", "391111111111", "x")]))
     assert r.status_code == 200
     assert meta_gateway.sent == [] and meta_gateway.acked == []
-    assert any(e["event"] == "webhook.not_whitelisted" for e in logs)
+    assert any(e["event"] == "inbound.not_whitelisted" for e in logs)
 
 
 def test_duplicate_wamid_processed_once(meta_client, meta_gateway):

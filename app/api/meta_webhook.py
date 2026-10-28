@@ -11,6 +11,7 @@ import json
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from fastapi.responses import PlainTextResponse
 
+from app.api.inbound import accept_inbound
 from app.channels.meta_security import is_valid_meta_signature, parse_meta_webhook
 from app.logging import get_logger, mask_number
 
@@ -69,21 +70,8 @@ async def receive(request: Request, background_tasks: BackgroundTasks) -> Respon
         )
 
     for inbound in events.messages:
-        log.info(
-            "webhook.received",
-            channel="meta",
-            message_sid=inbound.message_sid,
-            num_media=len(inbound.media),
-            has_body=bool(inbound.body),
-        )
-        user = state.whitelist.lookup(inbound.from_number)
-        if user is None:
-            # Never answer numbers outside the whitelist, not even with an error.
-            log.info("webhook.not_whitelisted", user_masked=mask_number(inbound.from_number))
-            continue
-        if not state.deduper.first_time(inbound.message_sid):
-            log.info("webhook.duplicate", message_sid=inbound.message_sid)
-            continue
-        background_tasks.add_task(state.runner.handle, inbound, user)
+        user = accept_inbound(state, inbound, source="meta_webhook")
+        if user is not None:
+            background_tasks.add_task(state.runner.handle, inbound, user)
 
     return PlainTextResponse("ok")

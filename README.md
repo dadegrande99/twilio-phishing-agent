@@ -87,10 +87,10 @@ Ogni riga di un'analisi porta `analysis_id`, `message_sid` e `user`, cioè il no
 
 | Evento | Quando |
 |---|---|
-| `webhook.received` | Twilio ha consegnato un messaggio (firma valida) |
+| `inbound.received` | è arrivato un messaggio (`source`: `twilio_webhook`, `twilio_polling`, `meta_webhook`) |
 | `webhook.signature_invalid` | firma non valida: URL ngrok/console non allineati, oppure chiamata non da Twilio |
-| `webhook.not_whitelisted` | numero non in whitelist: nessuna risposta inviata |
-| `webhook.duplicate` | stesso `MessageSid` ricevuto due volte |
+| `inbound.not_whitelisted` | numero non in whitelist: nessuna risposta inviata |
+| `inbound.duplicate` | stesso id di messaggio ricevuto due volte |
 | `analysis.queued` / `analysis.started` | analisi in coda e avviata (`wait_ms` = attesa per il lock utente) |
 | `media.downloaded` / `media.rejected` | download dell'immagine da Twilio |
 | `graph.node.started` / `graph.node.completed` | nodi LangGraph (`extract`, `judge`, `format`, `help`) con durata |

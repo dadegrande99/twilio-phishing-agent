@@ -38,7 +38,7 @@ def test_not_whitelisted_gets_nothing(app_client, gateway):
         r = signed_post(app_client, WEBHOOK, params(frm="whatsapp:+391111111111"))
     assert r.status_code == 200 and "<Response></Response>" in r.text
     assert gateway.sent == []
-    ev = next(e for e in logs if e["event"] == "webhook.not_whitelisted")
+    ev = next(e for e in logs if e["event"] == "inbound.not_whitelisted")
     assert ev["user_masked"] == "+39***1111"
 
 
@@ -55,7 +55,7 @@ def test_duplicate_message_processed_once(app_client, gateway):
         signed_post(app_client, WEBHOOK, params(sid="MM9"))
         signed_post(app_client, WEBHOOK, params(sid="MM9"))
     assert [k for _, _, k in gateway.sent].count("final") == 1
-    assert any(e["event"] == "webhook.duplicate" for e in logs)
+    assert any(e["event"] == "inbound.duplicate" for e in logs)
 
 
 def test_status_callback_logged(app_client):

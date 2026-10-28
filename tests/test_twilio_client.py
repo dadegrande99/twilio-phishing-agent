@@ -141,3 +141,10 @@ async def test_twilio_acknowledge_sends_ack_text(settings):
     tw = twilio_mock()
     await TwilioGateway(settings, client=tw).acknowledge("+393331234567", "MM1", "ok!")
     assert tw.messages.create.call_args.kwargs["body"] == "ok!"
+
+
+async def test_polling_mode_sends_without_status_callback(settings):
+    settings.inbound_mode = "polling"
+    tw = twilio_mock()
+    await TwilioGateway(settings, client=tw).send("+393331234567", "x", "final")
+    assert "status_callback" not in tw.messages.create.call_args.kwargs
