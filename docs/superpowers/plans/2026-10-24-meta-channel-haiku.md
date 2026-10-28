@@ -368,3 +368,92 @@ async def test_chat_calls_create_without_format(): ...    # kwargs["output_confi
 - [ ] **Step 3: Implementa**
 - [ ] **Step 4: Verifica** — `uv run pytest -q -p no:logging` → PASS; live: `uv run pytest -m live -q` con un nuovo test `test_live_chat` (`"ciao, come funzioni?"` → risposta non vuota, ≤ 600 caratteri)
 - [ ] **Step 5: Commit** — `git commit -m "feat: short llm-generated replies for conversational messages"`
+
+---
+
+## Fase F — Ricezione Twilio via polling (aggiunta del 2026-10-28)
+
+**Decisioni dell'utente:** `INBOUND_MODE=webhook|polling`, **default `polling`**; `POLL_INTERVAL_SECONDS=5`. Meta non supporta il polling: con `CHANNEL=meta` serve `INBOUND_MODE=webhook`, altrimenti l'app non parte. Il polling non aggira i limiti del Trial Twilio (21654, media 401).
+
+### Task 10: Ricezione condivisa e impostazioni
+
+**Files:**
+- Create: `app/api/inbound.py`
+- Modify: `app/config.py`, `app/api/twilio_webhook.py`, `app/api/meta_webhook.py`, `app/channels/twilio_client.py` (`status_callback` solo in modalità webhook), `tests/conftest.py` (le fixture `settings`/`meta_settings` usano `inbound_mode="webhook"`), i test che verificano `webhook.not_whitelisted` e `webhook.duplicate`, README e docs (tabella log)
+- Test: `tests/test_config.py`, `tests/test_inbound.py`, `tests/test_twilio_client.py`
+
+**Interfaces:**
+- Produces:
+  - `Settings.inbound_mode: Literal["webhook", "polling"] = "polling"`, `Settings.poll_interval_seconds: float = 5`, `Settings.public_base_url: str = ""` (diventa facoltativo).
+  - `Settings.check_channel_credentials()`, controlli aggiuntivi:
+    - `channel == "meta"` e `inbound_mode == "polling"` → `ValueError("INBOUND_MODE=polling is only supported with CHANNEL=twilio; set INBOUND_MODE=webhook")`;
+    - `inbound_mode == "webhook"` e `public_base_url` vuoto → `ValueError` che cita `PUBLIC_BASE_URL`.
+  - `accept_inbound(state, inbound: InboundMessage, *, source: Literal["twilio_webhook", "meta_webhook", "twilio_polling"]) -> AllowedUser | None` in `app/api/inbound.py`. Logga `inbound.received` (`source`, `message_sid`, `num_media`, `has_body`), poi applica whitelist (`inbound.not_whitelisted`) e dedupe (`inbound.duplicate`). Restituisce l'utente se il messaggio va elaborato. I due webhook la usano al posto della loro logica duplicata.
+  - `TwilioGateway.send`: passa `status_callback` solo se `inbound_mode == "webhook"`.
+
+- [ ] **Step 1: Test che falliscono**
+
+```python
+def test_default_inbound_mode_is_polling():
+    s = Settings(_env_file=None, anthropic_api_key="k", twilio_account_sid="AC", twilio_auth_token="t")
+    assert s.inbound_mode == "polling" and s.poll_interval_seconds == 5
+    s.check_channel_credentials()   # polling needs no PUBLIC_BASE_URL
+
+def test_meta_with_polling_refused(meta_settings): ...     # inbound_mode="polling" → ValueError "INBOUND_MODE=polling"
+def test_webhook_mode_requires_public_url(): ...           # twilio + webhook + public_base_url="" → ValueError "PUBLIC_BASE_URL"
+
+# test_inbound.py (state = SimpleNamespace(whitelist=Whitelist(...), deduper=MessageDeduper()))
+def test_accept_whitelisted(): ...        # → AllowedUser; log inbound.received source=twilio_polling
+def test_reject_not_whitelisted(): ...    # → None; log inbound.not_whitelisted, numero mascherato
+def test_reject_duplicate(): ...          # seconda volta → None; log inbound.duplicate
+
+# test_twilio_client.py
+async def test_polling_mode_sends_without_status_callback(settings): ...   # inbound_mode="polling" → "status_callback" not in kwargs
+```
+
+- [ ] **Step 2: Verifica fallimento** → FAIL
+- [ ] **Step 3: Implementa**; aggiorna i test esistenti sui nomi degli eventi (`webhook.*` → `inbound.*`)
+- [ ] **Step 4: Verifica** — `uv run pytest -q -p no:logging` → PASS; `uv run ruff check` → pulito
+- [ ] **Step 5: Commit** — `git commit -m "refactor: shared inbound acceptance, inbound_mode setting (default polling)"`
+
+### Task 11: `TwilioPoller` e avvio nel ciclo di vita dell'app
+
+**Files:**
+- Create: `app/channels/twilio_poller.py`
+- Modify: `app/main.py` (lifespan: in polling avvia il poller e lo ferma allo spegnimento; monta il router Twilio solo in webhook; `/health` riporta `inbound_mode`), `app/api/health.py`, `.env.example`, `README.md`, `docs/twilio.md` (§13 Polling)
+- Test: `tests/test_twilio_poller.py`, `tests/test_api_core.py`
+
+**Interfaces:**
+- Produces: `class TwilioPoller`:
+  - `__init__(self, settings, *, client, on_message: Callable[[InboundMessage], Awaitable[None]], clock: Callable[[], datetime] = lambda: datetime.now(UTC))`
+  - `since` iniziale = `clock()` all'avvio: i messaggi precedenti vengono ignorati.
+  - `async poll_once(self) -> int`:
+    1. `await asyncio.to_thread(client.messages.list, to=settings.twilio_whatsapp_from, date_sent_after=since - 60s, limit=100)`;
+    2. tiene solo `direction == "inbound"` con SID non ancora visto (insieme limitato agli ultimi 1000);
+    3. ordina per `date_sent` crescente;
+    4. per ogni messaggio con `num_media > 0` legge `client.messages(sid).media.list()` e costruisce `MediaRef(locator="https://api.twilio.com" + uri senza ".json", content_type)`;
+    5. costruisce `InboundMessage(sid, from_ senza "whatsapp:", body.strip(), media, None)` e chiama `await on_message(...)`;
+    6. aggiorna `since` al `date_sent` più recente;
+    7. restituisce il numero di messaggi nuovi.
+
+    Un'eccezione durante il giro non viene propagata: log `poller.error` (`error_type` e messaggio con i numeri mascherati) e `return 0`.
+  - `async run(self, stop: asyncio.Event)`: logga `poller.started` (`interval_s`, `to`); poi `poll_once()` e attesa di `poll_interval_seconds`, oppure uscita appena `stop` è impostato; alla fine `poller.stopped`.
+  - Il client Twilio è quello lazy di `TwilioGateway` (con timeout 15 s), riusato.
+  - In `create_app`, `on_message` = `accept_inbound(state, m, source="twilio_polling")`; se restituisce un utente, `asyncio.create_task(runner.handle(m, user))`, conservando i riferimenti ai task in un set.
+
+- [ ] **Step 1: Test che falliscono.** Il client finto ha `messages.list(**kw)` che registra i kwargs e restituisce oggetti `SimpleNamespace(sid, direction, from_, body, num_media, date_sent)`, e `messages(sid).media.list()`.
+
+```python
+async def test_dispatches_new_inbound_in_order(settings): ...      # 2 inbound non ordinati + 1 outbound → on_message chiamato 2 volte, in ordine di date_sent
+async def test_same_sid_not_dispatched_twice(settings): ...        # due poll_once con lo stesso messaggio → 1 chiamata
+async def test_filters_by_sender_and_since(settings): ...          # kwargs["to"] == settings.twilio_whatsapp_from; date_sent_after == start - 60s
+async def test_media_refs_built(settings): ...                     # num_media=1 → MediaRef("https://api.twilio.com/2010-04-01/Accounts/AC/Messages/MM/Media/ME1", "image/jpeg")
+async def test_network_error_logged_and_loop_survives(settings): ... # list solleva ConnectionError → 0, log poller.error; il poll successivo funziona
+async def test_run_stops_on_event(settings): ...                   # poll_interval 0.01, stop dopo il primo giro → run termina, log poller.stopped
+def test_polling_app_has_no_twilio_webhook(settings): ...          # inbound_mode="polling" → POST /webhooks/twilio/whatsapp → 404; /health inbound_mode == "polling"
+```
+
+- [ ] **Step 2: Verifica fallimento** → FAIL
+- [ ] **Step 3: Implementa**; aggiorna `.env.example` (`INBOUND_MODE=polling`, `POLL_INTERVAL_SECONDS=5`), README (sezione "Ricezione: webhook o polling") e `docs/twilio.md` §13
+- [ ] **Step 4: Verifica** — `uv run pytest -q -p no:logging` → PASS. Verifica locale: `CHANNEL=twilio INBOUND_MODE=polling` avvia il server senza `PUBLIC_BASE_URL`; nei log `poller.started`, e `poller.error` se Twilio non è raggiungibile; il server resta attivo.
+- [ ] **Step 5: Commit** — `git commit -m "feat: twilio inbound polling mode (default), no public url needed"`
