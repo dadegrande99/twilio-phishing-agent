@@ -46,6 +46,17 @@ Differenze visibili all'utente:
 
 Un account **Twilio in Trial** blocca testi liberi e immagini: vedi [docs/twilio.md §12](docs/twilio.md#12-account-trial-e-nuova-tryout-ui).
 
+## Ricezione: polling o webhook
+
+`INBOUND_MODE` decide come arrivano i messaggi:
+
+| `INBOUND_MODE` | Come funziona | Serve ngrok? | Canali |
+|---|---|---|---|
+| `polling` (default) | Ogni `POLL_INTERVAL_SECONDS` (default 5) il server chiede a Twilio i nuovi messaggi | **No** | solo `twilio` |
+| `webhook` | Twilio o Meta chiamano il nostro endpoint pubblico a ogni messaggio | Sì (`PUBLIC_BASE_URL`) | `twilio`, `meta` |
+
+Il polling è comodo per sviluppare in locale: niente tunnel e niente URL da configurare in Console. In cambio la risposta arriva con qualche secondo di ritardo in più, e gli stati dei messaggi inviati si vedono solo nella Console Twilio, perché senza URL pubblico non c'è callback. Con `CHANNEL=meta` serve `INBOUND_MODE=webhook`: Meta non permette di leggere i messaggi in arrivo via API. Dettagli in [docs/twilio.md §13](docs/twilio.md#13-ricezione-via-polling-senza-webhook).
+
 ## Avvio
 
 ```bash
@@ -91,6 +102,7 @@ Ogni riga di un'analisi porta `analysis_id`, `message_sid` e `user`, cioè il no
 | `webhook.signature_invalid` | firma non valida: URL ngrok/console non allineati, oppure chiamata non da Twilio |
 | `inbound.not_whitelisted` | numero non in whitelist: nessuna risposta inviata |
 | `inbound.duplicate` | stesso id di messaggio ricevuto due volte |
+| `poller.started` / `poller.message_found` / `poller.error` / `poller.stopped` | polling Twilio: avvio, nuovo messaggio trovato, errore temporaneo (si riprova al giro dopo), arresto |
 | `analysis.queued` / `analysis.started` | analisi in coda e avviata (`wait_ms` = attesa per il lock utente) |
 | `media.downloaded` / `media.rejected` | download dell'immagine da Twilio |
 | `graph.node.started` / `graph.node.completed` | nodi LangGraph (`extract`, `judge`, `format`, `help`) con durata |

@@ -39,6 +39,10 @@ class TwilioGateway:
         self._client = client
         self._http = http or httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT_SECONDS)
 
+    def rest_client(self) -> Client:
+        """The Twilio REST client (also used by the poller)."""
+        return self._twilio()
+
     def _twilio(self) -> Client:
         # Created lazily so the app can start before Twilio credentials are configured.
         if self._client is None:

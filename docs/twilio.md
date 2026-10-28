@@ -178,3 +178,35 @@ Gli account Twilio nuovi partono in **Trial** con una pagina "Try out WhatsApp" 
   - accesso ai media → **401 "This feature is not available on a Trial account"**.
 
 Quindi in Trial il bot riceve i messaggi ma non riesce né a leggere gli screenshot né a rispondere. Servono l'**upgrade** dell'account oppure il canale Meta (`CHANNEL=meta`, vedi `docs/meta-whatsapp.md`), che con il numero di test funziona gratis.
+
+## 13. Ricezione via polling (senza webhook)
+
+Con `INBOUND_MODE=polling`, il default, il server non espone nessun webhook: è lui a chiedere a Twilio, ogni `POLL_INTERVAL_SECONDS` secondi, i messaggi arrivati.
+
+```
+loop ogni 5 s:
+  GET /2010-04-01/Accounts/{SID}/Messages.json?To=whatsapp:+<nostro mittente>&DateSent>=<ultimo visto - 60 s>
+  → per ogni messaggio inbound mai visto (in ordine cronologico):
+       se ha media: GET …/Messages/{MessageSid}/Media.json → URL del media
+       stesso percorso del webhook: whitelist → dedupe → analisi → risposta via REST
+```
+
+Perché funziona: Twilio salva sempre i messaggi in arrivo nell'account, anche se il webhook non è configurato o non risponde. Puoi lasciare vuoto il campo *When a message comes in* della sandbox. Se resta un vecchio URL, Twilio registra un errore nel Debugger, ma il messaggio viene salvato comunque.
+
+**Pro:**
+- niente ngrok e niente URL pubblico;
+- niente firma da verificare;
+- funziona dietro qualsiasi rete.
+
+**Contro:**
+- fino a `POLL_INTERVAL_SECONDS` secondi di ritardo in più;
+- una chiamata API a ogni giro;
+- senza URL pubblico non c'è `status_callback`: gli stati (delivered, read, failed) si vedono in **Monitor → Logs → Messaging**.
+
+**Comportamento:**
+- **All'avvio** si parte da "adesso": i messaggi vecchi non vengono rianalizzati.
+- **Errori di rete o DNS:** ogni errore viene loggato come `poller.error` e il giro successivo riprova. Il poller non si ferma mai. Il DNS del router che a volte non risolve `api.twilio.com` produce proprio questo errore; se succede spesso, usa DNS `1.1.1.1` / `8.8.8.8`.
+- **Trial:** il polling cambia solo il modo di ricevere i messaggi. I limiti del Trial (§12) restano: niente testo libero e niente media senza upgrade.
+- **Solo Twilio:** con `CHANNEL=meta` serve `INBOUND_MODE=webhook`.
+
+Nel codice: `app/channels/twilio_poller.py` (poller) e `app/main.py` (avvio e arresto insieme all'app).

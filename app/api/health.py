@@ -9,6 +9,7 @@ async def health(request: Request) -> dict:
     return {
         "status": "ok",
         "channel": state.settings.channel,
+        "inbound_mode": state.settings.inbound_mode,
         "model": state.settings.anthropic_model,
         "whitelist_entries": len(state.whitelist),
     }
