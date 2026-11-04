@@ -19,7 +19,7 @@ LANGSMITH_PROJECT=whatsapp-phishing-agent
 # LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
 ```
 
-4. Riavvia il server e fai un'analisi (con `/debug/analyze` o da WhatsApp).
+4. Riavvia il server e fai un'analisi: da WhatsApp, oppure con `/debug/analyze` (richiede `DEBUG=true`).
 5. Su smith.langchain.com apri il progetto `whatsapp-phishing-agent`: trovi un trace chiamato `phishing-analysis`.
 
 Non serve scrivere codice: LangGraph invia i trace da solo quando `LANGSMITH_TRACING=true`. Il piano prevede solo due aggiunte:

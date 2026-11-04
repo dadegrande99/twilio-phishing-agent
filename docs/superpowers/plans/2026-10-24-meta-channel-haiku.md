@@ -1,5 +1,7 @@
 # Meta Channel + Haiku + Conversation Implementation Plan
 
+> **Storico.** Questo documento è un'istantanea del momento in cui è stato scritto (fa parte del flusso di lavoro con l'agente). Nomi di eventi, default e dettagli possono essere cambiati in seguito: la fonte di verità è il codice, e la documentazione corrente è nel README e in `docs/*.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Aggiungere il canale WhatsApp Cloud API di Meta accanto a Twilio (selezionabile con `CHANNEL`), passare il modello di default a `claude-haiku-5-5` e, dopo il test end-to-end, sostituire l'help fisso con una breve risposta conversazionale.

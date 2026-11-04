@@ -1,5 +1,7 @@
 # Come capire la lingua dell'utente
 
+> **Proposta, non implementata.** Il campo `lang` nella whitelist, l'evento `language.resolved` e la libreria `lingua-language-detector` descritti qui non esistono nel codice: oggi le risposte sono sempre in italiano.
+
 Oggi l'agente risponde sempre in italiano. Questo documento spiega come rispondere nella lingua dell'utente, quali segnali usare e in che ordine.
 
 ## Il punto chiave: lingua dell'utente ≠ lingua dello screenshot

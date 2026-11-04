@@ -1,5 +1,7 @@
 # Addendum: canale Meta, modello Haiku, un po' di conversazione
 
+> **Storico.** Questo documento è un'istantanea del momento in cui è stato scritto (fa parte del flusso di lavoro con l'agente). Nomi di eventi, default e dettagli possono essere cambiati in seguito: la fonte di verità è il codice, e la documentazione corrente è nel README e in `docs/*.md`.
+
 Data: 2026-10-24
 Estende: `2026-10-24-whatsapp-phishing-agent-design.md`. Tutto ciò che qui non è detto resta come nello spec principale.
 

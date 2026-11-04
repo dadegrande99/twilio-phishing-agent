@@ -1,5 +1,7 @@
 # WhatsApp Phishing Agent — Implementation Plan
 
+> **Storico.** Questo documento è un'istantanea del momento in cui è stato scritto (fa parte del flusso di lavoro con l'agente). Nomi di eventi, default e dettagli possono essere cambiati in seguito: la fonte di verità è il codice, e la documentazione corrente è nel README e in `docs/*.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Agente LangGraph esposto via FastAPI che riceve screenshot/testi via WhatsApp (Twilio), valuta phishing/impersonation con Claude Sonnet 5.5 e risponde con messaggi di avanzamento e verdetto, solo ai numeri in whitelist.

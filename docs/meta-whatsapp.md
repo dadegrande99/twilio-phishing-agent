@@ -71,9 +71,9 @@ Cose da sapere:
 - **Un payload può contenere più messaggi**, e anche solo `statuses` (gli aggiornamenti sui nostri invii). Li elaboriamo tutti.
 - **Tipi**:
   - `text` e `image` vengono analizzati; la didascalia dell'immagine è in `image.caption`.
-  - `audio`, `video`, `document`, `sticker` e gli altri tipi ricevono "posso analizzare solo immagini o testo".
+  - `audio`, `video`, `document`, `sticker` e gli altri tipi ricevono "posso analizzare solo immagini o testo" (anche gli sticker, che pure sono immagini webp).
   - `reaction` (un'emoji sul nostro verdetto) viene ignorato.
-- **Rispondiamo sempre 200 subito.** Se non riceve 200, Meta ripete l'invio. Per questo l'analisi parte in background, e il dedupe sul `wamid` evita di analizzare due volte lo stesso messaggio.
+- **Rispondiamo 200 subito a ogni payload con firma valida** (403 se la firma non è valida, 400 se il body non è JSON). Se non riceve 200, Meta ripete l'invio. Gli elementi malformati vengono saltati (`meta.payload.malformed`) senza perdere gli altri. Per questo l'analisi parte in background, e il dedupe sul `wamid` evita di analizzare due volte lo stesso messaggio.
 
 ## 5. Sicurezza: la firma `X-Hub-Signature-256`
 

@@ -1,5 +1,7 @@
 # WhatsApp Phishing Agent — Design (PoC)
 
+> **Storico.** Questo documento è un'istantanea del momento in cui è stato scritto (fa parte del flusso di lavoro con l'agente). Nomi di eventi, default e dettagli possono essere cambiati in seguito: la fonte di verità è il codice, e la documentazione corrente è nel README e in `docs/*.md`.
+
 Data: 2026-10-24
 Stato: approvato e implementato. Esteso da `2026-10-24-meta-channel-haiku-design.md` (canale Meta, Haiku, conversazione).
 

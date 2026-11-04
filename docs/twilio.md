@@ -110,7 +110,7 @@ client.messages.create(
 
 L'SDK `twilio` è sincrono, quindi lo chiamiamo con `asyncio.to_thread` per non bloccare il server. La chiamata ritorna subito con lo stato `queued`: "accettato da Twilio", non "consegnato".
 
-Grazie a `status_callback`, Twilio ci richiama a ogni cambio di stato. Il nostro endpoint `/webhooks/twilio/status` logga `twilio.status.updated`, così nei log vedi il ciclo di vita completo:
+Il codice passa `status_callback` **solo con `INBOUND_MODE=webhook`**: in polling non c'è un URL pubblico, quindi gli stati si vedono solo nella Console. Grazie a `status_callback`, Twilio ci richiama a ogni cambio di stato. Il nostro endpoint `/webhooks/twilio/status` logga `twilio.status.updated`, così nei log vedi il ciclo di vita completo:
 
 ```
 queued ──▶ sending ──▶ sent ──▶ delivered ──▶ read
@@ -126,13 +126,15 @@ Limite: 1600 caratteri per messaggio. Il nostro messaggio finale resta sotto i 1
 | Tutti i webhook ricevono 403 | `PUBLIC_BASE_URL` diverso dall'URL configurato su Twilio (ngrok riavviato) | Allinea `.env` e console, riavvia il server |
 | Nessun log `inbound.received` | URL webhook sbagliato in console, oppure ngrok spento | Controlla la console Twilio e l'interfaccia di ngrok (`http://127.0.0.1:4040`) |
 | `inbound.not_whitelisted` per il tuo numero | Numero non in `config/whitelist.json`, o non in formato E.164 | Aggiungi `+39...` senza spazi |
-| Errore **63015** in `twilio.status.updated` | Il destinatario non si è unito alla sandbox, o l'adesione è scaduta | Rimanda `join <parola>` al numero sandbox |
+| Errore **63015** (in `twilio.status.updated` in modalità webhook, oppure in Monitor → Logs) | Il destinatario non si è unito alla sandbox, o l'adesione è scaduta | Rimanda `join <parola>` al numero sandbox |
 | Errore **63016** | Messaggio fuori dalla finestra di 24 ore | Non dovrebbe capitare: l'utente ha appena scritto |
 | `media.rejected` con `reason=download_failed status=401` | Download con credenziali sbagliate | Controlla SID/token nel `.env` |
 
 Per gli altri codici d'errore: Twilio Console → **Monitor → Logs → Errors**. Ogni codice ha una pagina con la spiegazione.
 
 ## 9. Setup della sandbox (passo per passo)
+
+I passi 1-3 servono sempre. I passi 4-7 (ngrok e webhook) servono **solo con `INBOUND_MODE=webhook`**: in polling (default) basta avviare il server, vedi §13.
 
 1. Crea un account su twilio.com, poi nella Console copia **Account SID** e **Auth Token** in `.env`.
 2. Console → **Messaging → Try it out → Send a WhatsApp message**. Trovi il numero sandbox e la tua parola `join <xxx-yyy>`.
@@ -171,7 +173,7 @@ Con il numero Business i messaggi sono a pagamento (tariffa Twilio + tariffa Met
 ## 12. Account Trial e nuova "Tryout UI"
 
 Gli account Twilio nuovi partono in **Trial** con una pagina "Try out WhatsApp" diversa dalla sandbox classica:
-- **Mittente diverso:** nel nostro test era **+49 15888 623971**, non +1 415 523 8886. Impostalo in `TWILIO_WHATSAPP_FROM`. Il codice di adesione era `join twilio-trial`.
+- **Mittente diverso:** nel nostro test era un numero tedesco (+49…) mostrato nella pagina "Try out WhatsApp", non +1 415 523 8886. Impostalo in `TWILIO_WHATSAPP_FROM`. Il codice di adesione era `join twilio-trial`. Dopo l'upgrade quel numero non era più collegato all'account: si è passati alla sandbox classica.
 - **Webhook:** si configura nella scheda **Receive a message → Custom → Webhook URL** (metodo `HTTP POST`).
 - **Limiti del Trial**, verificati sul nostro account:
   - invio di testo libero via API → errore **21654 "ContentSid Required"**: in Trial si possono mandare solo i template forniti da Twilio;
@@ -210,3 +212,20 @@ Perché funziona: Twilio salva sempre i messaggi in arrivo nell'account, anche s
 - **Solo Twilio:** con `CHANNEL=meta` serve `INBOUND_MODE=webhook`.
 
 Nel codice: `app/channels/twilio_poller.py` (poller) e `app/main.py` (avvio e arresto insieme all'app).
+
+## 14. Account a pagamento: KYC e costi
+
+Cosa abbiamo incontrato dopo l'upgrade dell'account (ottobre 2026):
+
+1. **Sandbox classica.** Dopo l'upgrade la pagina "Try WhatsApp" mostra il numero condiviso **+1 415 523 8886** e un codice `join <parola>`. Il primo `join` può fallire con *"Failed to join sandbox"*. Nel nostro caso è andato a buon fine dopo aver configurato l'Inbound URL della sandbox (*When a message comes in*). Se il campo resta vuoto, Twilio risponde a ogni messaggio con *"You said: … Configure your WhatsApp Sandbox's Inbound URL…"*; in polling basta che contenga un URL qualsiasi.
+2. **KYC: errore `20003`, "Primary compliance profile is not approved".** Un account a pagamento può scrivere liberamente solo dopo che Twilio ha approvato un **Primary Compliance Profile** (Trust Hub). Prima di allora può scrivere solo ai numeri verificati (*Verified Caller IDs*).
+   - Per una persona fisica: Trust Hub → *Create Primary Customer Profile* → **Individual**. Servono nome come sul documento, data di nascita, indirizzo, foto del documento e un selfie dalla Console.
+   - Revisione: fino a 48 ore (nel nostro caso molto meno). Stati: *In Review* → *Approved* / *Rejected*. Se viene rifiutato, si corregge e si reinvia.
+3. **Costi osservati.** Circa **0,03 $ per messaggio inviato** a un numero italiano: commissione Twilio 0,005 $ più la tariffa per messaggio di Meta. I messaggi in arrivo dalla sandbox risultavano a 0 $. Un'analisi completa (3 messaggi) costa quindi circa 0,09 $. Ipotesi, non documentata: la sandbox è un numero condiviso, quindi la quota mensile gratuita di service messages di Meta non si applica in pratica. Con un mittente proprio i primi 1.000 service messages al mese dovrebbero pagare solo la commissione Twilio.
+
+Fonti:
+- [Twilio – WhatsApp pricing](https://www.twilio.com/en-us/whatsapp/pricing)
+- [Twilio – Primary compliance profiles](https://www.twilio.com/docs/trust-hub/profiles/primary-compliance-profiles)
+- [Twilio – errore 20003](https://www.twilio.com/docs/api/errors/20003)
+- [Twilio – errore 21608](https://www.twilio.com/docs/api/errors/21608)
+- [Meta – WhatsApp pricing](https://developers.facebook.com/docs/whatsapp/pricing)
