@@ -135,3 +135,51 @@ async def test_download_media_lookup_error(meta_settings):
     with pytest.raises(MediaRejected) as e:
         await gw.download_image(MediaRef("MEDIA1", "image/jpeg"))
     assert e.value.reason == "download_failed"
+
+
+async def test_send_non_json_200_does_not_raise(meta_settings):
+    gw, _ = gateway(meta_settings, lambda r: httpx.Response(200, text="<html>maintenance</html>"))
+    assert await gw.send("+393331234567", "x", "final") is None
+
+
+async def test_send_error_with_non_dict_error_does_not_raise(meta_settings):
+    gw, _ = gateway(meta_settings, lambda r: httpx.Response(500, json={"error": "boom"}))
+    assert await gw.send("+393331234567", "x", "final") is None
+
+
+async def test_acknowledge_non_json_does_not_raise(meta_settings):
+    gw, _ = gateway(meta_settings, lambda r: httpx.Response(500, text="oops"))
+    await gw.acknowledge("+393331234567", "wamid.1", "x")
+
+
+@pytest.mark.parametrize("file_size", [None, "abc", 0, -5])
+async def test_download_requires_valid_file_size(meta_settings, file_size):
+    lookup = {"url": "https://lookaside.fbsbx.com/x", "mime_type": "image/jpeg"}
+    if file_size is not None:
+        lookup["file_size"] = file_size
+    gw, seen = gateway(meta_settings, media_handler(lookup))
+    with pytest.raises(MediaRejected) as e:
+        await gw.download_image(MediaRef("MEDIA1", "image/jpeg"))
+    assert e.value.reason == "download_failed" and len(seen) == 1
+
+
+async def test_download_lookup_non_json_rejected(meta_settings):
+    def handler(request):
+        return httpx.Response(200, text="not json")
+
+    gw, _ = gateway(meta_settings, handler)
+    with pytest.raises(MediaRejected):
+        await gw.download_image(MediaRef("MEDIA1", "image/jpeg"))
+
+
+@pytest.mark.parametrize("url", ["https://lookaside.fbsbx.com＠evil.example/x", 12345, None])
+async def test_download_weird_url_rejected(meta_settings, url):
+    lookup = {"url": url, "mime_type": "image/jpeg", "file_size": 10}
+    gw, seen = gateway(meta_settings, media_handler(lookup))
+    with pytest.raises(MediaRejected):
+        await gw.download_image(MediaRef("MEDIA1", "image/jpeg"))
+    assert len(seen) == 1
+
+
+def test_mask_bare_digit_numbers():
+    assert "393331234567" not in mask_numbers_in_text("Recipient 393331234567 not allowed")

@@ -128,3 +128,42 @@ def test_statuses_parsed():
 def test_garbage_payload():
     for payload in ({}, {"entry": "x"}, {"entry": [{"changes": [{"value": None}]}]}, []):
         assert parse_meta_webhook(payload) == MetaEvents([], [])
+
+
+def test_malformed_elements_skipped_valid_siblings_kept():
+    payload = meta_payload(
+        messages=[
+            5,
+            {"from": NUMBER_RAW, "id": "bad1", "type": "text", "text": "hi"},
+            {"from": NUMBER_RAW, "id": "bad2", "type": "text", "text": {"body": 5}},
+            {"from": NUMBER_RAW, "id": "bad3", "type": "image", "image": {"id": "M", "caption": 7}},
+            text_msg("good", NUMBER_RAW, "ok"),
+        ],
+        statuses=[{"id": "s1", "status": "failed", "errors": "boom"},
+                  {"id": "s2", "status": "failed", "errors": {"code": 1}}],
+        contacts=5,
+    )
+    events = parse_meta_webhook(payload)
+    assert [m.message_sid for m in events.messages] == ["good"]
+    assert [s.message_id for s in events.statuses] == ["s1", "s2"]
+
+
+def test_non_list_messages_ignored():
+    value_payload = meta_payload()
+    value_payload["entry"][0]["changes"][0]["value"]["messages"] = 5
+    value_payload["entry"][0]["changes"][0]["value"]["statuses"] = 5
+    assert parse_meta_webhook(value_payload) == MetaEvents([], [])
+
+
+def test_sticker_and_document_are_unsupported():
+    events = parse_meta_webhook(meta_payload(messages=[
+        {"from": NUMBER_RAW, "id": "s", "type": "sticker", "sticker": {"id": "S", "mime_type": "image/webp"}},
+        {"from": NUMBER_RAW, "id": "d", "type": "document", "document": {"id": "D", "mime_type": "image/png"}},
+    ]))
+    assert [m.media for m in events.messages] == [
+        [MediaRef("", "unsupported/sticker")], [MediaRef("", "unsupported/document")]
+    ]
+
+
+def test_non_ascii_signature_header_is_invalid_not_error():
+    assert not is_valid_meta_signature("app-secret", b"{}", "sha256=é")

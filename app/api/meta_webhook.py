@@ -28,7 +28,9 @@ async def verify(request: Request) -> Response:
     params = request.query_params
     expected = request.app.state.settings.meta_verify_token.get_secret_value()
     token = params.get("hub.verify_token", "")
-    if params.get("hub.mode") == "subscribe" and hmac.compare_digest(token, expected):
+    if params.get("hub.mode") == "subscribe" and hmac.compare_digest(
+        token.encode(), expected.encode()
+    ):
         log.info("meta.verified")
         return PlainTextResponse(params.get("hub.challenge", ""))
     log.warning("meta.verify_failed", mode=params.get("hub.mode"))

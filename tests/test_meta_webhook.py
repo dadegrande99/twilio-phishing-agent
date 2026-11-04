@@ -110,3 +110,8 @@ def test_health_reports_channel(meta_client):
 
 def test_twilio_webhook_not_mounted_on_meta(meta_client):
     assert meta_client.post("/webhooks/twilio/whatsapp", data={}).status_code == 404
+
+
+def test_verify_non_ascii_token_403(meta_client):
+    r = meta_client.get("/webhooks/meta", params={**VERIFY, "hub.verify_token": "é"})
+    assert r.status_code == 403

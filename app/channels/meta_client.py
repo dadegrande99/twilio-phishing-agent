@@ -27,19 +27,40 @@ TIMEOUT_SECONDS = 15
 _META_HOST_SUFFIXES = ("facebook.com", "fbsbx.com", "fbcdn.net", "whatsapp.net")
 
 
-def _is_meta_url(url: str) -> bool:
-    parts = urlsplit(url)
-    host = parts.hostname or ""
+def _is_meta_url(url) -> bool:
+    if not isinstance(url, str):
+        return False
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or ""
+    except ValueError:  # e.g. netloc with characters that normalise to '@'
+        return False
     return parts.scheme == "https" and any(
         host == suffix or host.endswith("." + suffix) for suffix in _META_HOST_SUFFIXES
     )
 
 
-def _error_fields(response: httpx.Response) -> dict:
+def _json(response: httpx.Response) -> dict:
+    """Response body as a dict; {} for anything else (HTML error pages, lists, ...)."""
     try:
-        error = response.json().get("error") or {}
+        body = response.json()
     except ValueError:
-        error = {}
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _positive_int(value) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _error_fields(response: httpx.Response) -> dict:
+    error = _json(response).get("error")
+    if not isinstance(error, dict):
+        error = {"message": str(error or "")}
     return {
         "status": response.status_code,
         "error_code": error.get("code"),
@@ -84,7 +105,13 @@ class MetaGateway:
         if response.status_code != 200:
             log.error("meta.message.failed", **fields, **_error_fields(response), ms=ms)
             return None
-        message_id = (response.json().get("messages") or [{}])[0].get("id")
+        messages = _json(response).get("messages")
+        message_id = None
+        if isinstance(messages, list) and messages and isinstance(messages[0], dict):
+            message_id = messages[0].get("id")
+        if message_id is None:
+            log.error("meta.message.failed", **fields, status=200, error="unexpected_response", ms=ms)
+            return None
         log.info("meta.message.sent", **fields, message_id=message_id, chars=len(body), ms=ms)
         return message_id
 
@@ -126,9 +153,14 @@ class MetaGateway:
         if lookup.status_code != 200:
             log.warning("media.rejected", reason="download_failed", **_error_fields(lookup))
             raise MediaRejected("download_failed")
-        info = lookup.json()
-        if int(info.get("file_size") or 0) > MAX_IMAGE_BYTES:
-            log.warning("media.rejected", reason="too_large", bytes=info.get("file_size"))
+        info = _json(lookup)
+        file_size = _positive_int(info.get("file_size"))
+        if file_size is None:
+            # Without a trustworthy size we would have to download blindly.
+            log.warning("media.rejected", reason="download_failed", error="missing_file_size")
+            raise MediaRejected("download_failed")
+        if file_size > MAX_IMAGE_BYTES:
+            log.warning("media.rejected", reason="too_large", bytes=file_size)
             raise MediaRejected("too_large")
         url = info.get("url", "")
         if not _is_meta_url(url):

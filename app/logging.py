@@ -92,7 +92,8 @@ def mask_number(raw: str) -> str:
     return f"{number[:3]}***{number[-4:]}"
 
 
-_PHONE = re.compile(r"\+\d{8,15}")
+# "+39..." numbers, and bare 10-15 digit numbers (Meta writes them without '+').
+_PHONE = re.compile(r"\+\d{8,15}|(?<![\w+])\d{10,15}(?!\w)")
 
 
 def mask_numbers_in_text(text: str) -> str:
