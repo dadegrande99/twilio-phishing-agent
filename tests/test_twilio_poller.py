@@ -38,7 +38,13 @@ class FakeTwilio:
 
     def __call__(self, sid):
         media = self.media_by_sid.get(sid, [])
-        return SimpleNamespace(media=SimpleNamespace(list=lambda **kw: media))
+
+        def list_media(**kw):
+            if isinstance(media, Exception):
+                raise media
+            return media
+
+        return SimpleNamespace(media=SimpleNamespace(list=list_media))
 
 
 def poller(settings, client):
@@ -125,3 +131,87 @@ def test_polling_app_has_no_twilio_webhook(settings):
     client = TestClient(app)
     assert client.post("/webhooks/twilio/whatsapp", data={}).status_code == 404
     assert client.get("/health").json()["inbound_mode"] == "polling"
+
+
+async def test_messages_before_startup_are_ignored(settings):
+    # The 60 s overlap must not re-analyse what arrived before the process started.
+    client = FakeTwilio([[msg("OLD", -30), msg("NEW", 5)]])
+    p, received = poller(settings, client)
+    await p.poll_once()
+    assert [m.message_sid for m in received] == ["NEW"]
+
+
+async def test_unreadable_media_does_not_block_other_messages(settings):
+    client = FakeTwilio(
+        [[msg("BAD", 5, num_media=1), msg("OK", 6)], [msg("BAD", 5, num_media=1), msg("OK2", 7)]],
+        media={"BAD": ConnectionError("media lookup failed")},
+    )
+    p, received = poller(settings, client)
+    with structlog.testing.capture_logs() as logs:
+        await p.poll_once()
+        await p.poll_once()
+    assert [m.message_sid for m in received] == ["OK", "OK2"]
+    assert any(e["event"] == "poller.message_skipped" for e in logs)
+
+
+async def test_fetches_all_pages(settings):
+    client = FakeTwilio([[msg(f"SM{i}", i) for i in range(1, 151)]])
+    p, received = poller(settings, client)
+    assert await p.poll_once() == 150 and len(received) == 150
+    assert client.list_calls[0].get("limit") is None
+
+
+async def test_message_without_date_is_skipped_not_fatal(settings):
+    broken = msg("NODATE", 5)
+    broken.date_sent = None
+    client = FakeTwilio([[broken], [msg("SM1", 6)]])
+    p, received = poller(settings, client)
+    assert await p.poll_once() == 0
+    assert await p.poll_once() == 1 and [m.message_sid for m in received] == ["SM1"]
+
+
+async def test_dispatch_error_does_not_stop_polling(settings):
+    calls = []
+
+    async def on_message(message):
+        calls.append(message.message_sid)
+        if message.message_sid == "SM1":
+            raise RuntimeError("boom")
+
+    client = FakeTwilio([[msg("SM1", 5), msg("SM2", 6)]])
+    p = TwilioPoller(settings, client=client, on_message=on_message, clock=lambda: START)
+    await p.poll_once()
+    assert calls == ["SM1", "SM2"]
+
+
+def test_poll_interval_must_be_positive():
+    import pytest
+    from pydantic import ValidationError
+
+    from app.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, anthropic_api_key="k", poll_interval_seconds=0)
+
+
+def test_app_shutdown_does_not_wait_for_slow_poll(settings):
+    import time
+
+    class SlowTwilio(FakeTwilio):
+        def list(self, **kwargs):
+            time.sleep(2)
+            return []
+
+    settings.inbound_mode = "polling"
+    app = create_app(
+        settings,
+        llm=FakeLLM(make_extraction(), make_verdict()),
+        gateway=FakeGateway(),
+        whitelist=Whitelist(settings.whitelist_path),
+        poller_client=SlowTwilio([]),
+    )
+    start = time.monotonic()
+    with TestClient(app) as client:
+        time.sleep(0.2)
+        assert client.get("/health").json()["inbound_mode"] == "polling"
+    assert time.monotonic() - start < 1.5

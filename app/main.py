@@ -31,7 +31,10 @@ def create_gateway(settings: Settings) -> MessagingGateway:
     return MetaGateway(settings) if settings.channel == "meta" else TwilioGateway(settings)
 
 
-def _polling_lifespan(settings: Settings):
+SHUTDOWN_GRACE_SECONDS = 10
+
+
+def _polling_lifespan(settings: Settings, poller_client=None):
     """Start the Twilio poller with the app and stop it on shutdown."""
 
     @asynccontextmanager
@@ -46,16 +49,28 @@ def _polling_lifespan(settings: Settings):
                 tasks.add(task)
                 task.add_done_callback(tasks.discard)
 
-        gateway = state.gateway
-        client = (gateway if isinstance(gateway, TwilioGateway) else TwilioGateway(settings))
-        poller = TwilioPoller(settings, client=client.rest_client(), on_message=on_message)
+        if poller_client is None:
+            gateway = state.gateway
+            owner = gateway if isinstance(gateway, TwilioGateway) else TwilioGateway(settings)
+            client = owner.rest_client()
+        else:
+            client = poller_client
+        poller = TwilioPoller(settings, client=client, on_message=on_message)
         stop = asyncio.Event()
         poll_task = asyncio.create_task(poller.run(stop))
         try:
             yield
         finally:
             stop.set()
-            await poll_task
+            # Don't wait for an in-flight Twilio request (up to 15 s per call).
+            poll_task.cancel()
+            await asyncio.gather(poll_task, return_exceptions=True)
+            if tasks:
+                _done, pending = await asyncio.wait(tasks, timeout=SHUTDOWN_GRACE_SECONDS)
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    log.warning("app.shutdown_cancelled_analyses", count=len(pending))
 
     return lifespan
 
@@ -66,6 +81,7 @@ def create_app(
     llm: AnalysisLLM | None = None,
     gateway: MessagingGateway | None = None,
     whitelist: Whitelist | None = None,
+    poller_client=None,
 ) -> FastAPI:
     if settings is None:
         # Exports .env into os.environ so LangSmith (LANGSMITH_*) can read it too.
@@ -78,7 +94,7 @@ def create_app(
     app = FastAPI(
         title="WhatsApp Phishing Agent",
         docs_url="/docs" if settings.debug else None,
-        lifespan=_polling_lifespan(settings) if polling else None,
+        lifespan=_polling_lifespan(settings, poller_client) if polling else None,
     )
     app.state.settings = settings
     app.state.graph = build_graph(llm or create_llm(settings))

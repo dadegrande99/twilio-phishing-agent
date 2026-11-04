@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # How inbound messages reach us: Twilio can be polled, Meta only supports webhooks.
     inbound_mode: Literal["webhook", "polling"] = "polling"
-    poll_interval_seconds: float = 5
+    poll_interval_seconds: float = Field(default=5, gt=0)
     # Public (ngrok) URL; only needed in webhook mode.
     public_base_url: str = ""
     validate_twilio_signature: bool = True
